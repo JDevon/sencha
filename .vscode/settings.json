@@ -1,0 +1,14 @@
+{
+	"luau-lsp.sourcemap.rojoProjectFile": "dev.project.json",
+	"luau-lsp.platform.type": "roblox",
+	"luau-lsp.ignoreGlobs": [
+		"**/_Index/**"
+	],
+	"cSpell.words": [
+		"getmetatable",
+		"metatable",
+		"resends",
+		"setmetatable",
+		"tostring"
+	],
+}

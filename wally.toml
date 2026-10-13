@@ -1,0 +1,27 @@
+[package]
+name = "jdevon/sencha"
+description = "A network package built around GreenTea, with strictly typed remotes and replicators."
+version = "0.1.0"
+license = "MIT"
+authors = ["JDevon"]
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+exclude = [
+	"sourcemap.json",
+	"dev.project.json",
+	"rokit.toml",
+	"selene.toml",
+	"moonwave.toml",
+	".luaurc",
+	".vscode",
+	"wally.lock",
+	"build",
+	".moonwave",
+	"**/.DS_Store",
+	".github",
+]
+
+[dependencies]
+GreenTea = "corecii/greentea@0.4.11"
+ObservableValue = "jdevon/observable-value@0.1.0"
+Signal = "sleitnick/signal@2.0.1"

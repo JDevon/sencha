@@ -1,0 +1,13 @@
+title = "Sencha"
+gitRepoUrl = "https://github.com/JDevon/sencha"
+classOrder = [
+	"Sencha",
+	"Event",
+	"Function",
+	"EventSwitchboard",
+	"FunctionSwitchboard",
+	"SavedSource",
+	"SavedReplicator",
+	"TemporaryPlayerReplicator",
+	"TemporaryGlobalReplicator",
+]

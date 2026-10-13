@@ -1,0 +1,14 @@
+{
+	"name": "SenchaDev",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"Packages": {
+				"$path": "Packages",
+				"Sencha": {
+					"$path": "src"
+				}
+			}
+		}
+	}
+}
