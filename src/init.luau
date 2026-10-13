@@ -1,6 +1,6 @@
 local RunService = game:GetService("RunService")
 
-local DefineHooks = require(script.DefineHooks)
+local DefineHooks = require(script.Util.DefineHooks)
 local RateLimiter = require(script.Remotes.RateLimiter)
 
 local RemoteEvent = require(script.Remotes.Kinds.RemoteEvent)
@@ -16,7 +16,7 @@ local TemporaryReplicator = require(script.Replication.Kinds.TemporaryReplicator
 local TemporaryPlayerReplicator = require(script.Replication.Kinds.TemporaryReplicator.TemporaryPlayerReplicator)
 local TemporaryGlobalReplicator = require(script.Replication.Kinds.TemporaryReplicator.TemporaryGlobalReplicator)
 
-local toDisconnect = require(script.toDisconnect)
+local toDisconnect = require(script.Util.toDisconnect)
 
 --[=[
 	@type Disconnect () -> ()

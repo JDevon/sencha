@@ -2,7 +2,7 @@ local RunService = game:GetService("RunService")
 
 local RemoteFunction = require(script.Parent.RemoteFunction)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
-local DefineHooks = require(script.Parent.Parent.Parent.DefineHooks)
+local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 
 --[=[
 	@class FunctionSwitchboard

@@ -8,7 +8,7 @@ local ChannelRegistry = require(script.Parent.Parent.Parent.ReplicationShared.Ch
 local ReplicationShared = require(script.Parent.Parent.Parent.Parent.Replication.ReplicationShared)
 local ReplicationServer = require(script.Parent.Parent.Parent.Parent.Replication.ReplicationServer)
 
-local toDisconnect = require(script.Parent.Parent.Parent.Parent.toDisconnect)
+local toDisconnect = require(script.Parent.Parent.Parent.Parent.Util.toDisconnect)
 
 type FetchAsync<D> = (player: Player) -> D?
 

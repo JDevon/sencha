@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local Cleanup = require(script.Parent.Parent.Cleanup)
+local Cleanup = require(script.Parent.Parent.Util.Cleanup)
 
 export type Reason = "rate limited" | "invalid arguments" | "unknown port"
 

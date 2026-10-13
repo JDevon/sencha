@@ -1,9 +1,9 @@
 local RunService = game:GetService("RunService")
 
 local RemoteEvent = require(script.Parent.RemoteEvent)
-local Cleanup = require(script.Parent.Parent.Parent.Cleanup)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
-local DefineHooks = require(script.Parent.Parent.Parent.DefineHooks)
+local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
+local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 
 --[=[
 	@class EventSwitchboard

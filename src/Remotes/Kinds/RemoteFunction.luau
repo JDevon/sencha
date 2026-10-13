@@ -1,10 +1,10 @@
 local RunService = game:GetService("RunService")
 
-local Cleanup = require(script.Parent.Parent.Parent.Cleanup)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local RemoteLoader = require(script.Parent.Parent.RemoteLoader)
-local DefineHooks = require(script.Parent.Parent.Parent.DefineHooks)
+local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
+local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
 
 --[=[

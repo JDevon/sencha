@@ -2,7 +2,7 @@ local ReplicationClient = require(script.Parent)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.ObservableValue)
 local ReplicatorChannel = require(script.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
-local toDisconnect = require(script.Parent.Parent.Parent.toDisconnect)
+local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
 
 export type ClientReplicator<T, P> = typeof(setmetatable(
 	{} :: {

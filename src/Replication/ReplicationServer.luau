@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local DefineHooks = require(script.Parent.Parent.DefineHooks)
+local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
 local RemoteSerialization = require(script.Parent.Parent.Remotes.RemoteSerialization)

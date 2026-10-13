@@ -1,13 +1,13 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local DefineHooks = require(script.Parent.Parent.Parent.DefineHooks)
+local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.ReplicationClient.ClientReplicator)
 local ReplicatorChannel = require(script.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
-local toDisconnect = require(script.Parent.Parent.Parent.toDisconnect)
+local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
 local openChannel = require(script.Parent.Parent.ReplicationShared.openChannel)
 
 --[=[

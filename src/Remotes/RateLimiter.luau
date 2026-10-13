@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local Cleanup = require(script.Parent.Parent.Cleanup)
+local Cleanup = require(script.Parent.Parent.Util.Cleanup)
 
 type PlayerBucket = { tokens: number, last: number }
 export type Limit = { burst: number, perSecond: number }

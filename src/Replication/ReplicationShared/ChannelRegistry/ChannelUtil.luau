@@ -1,6 +1,6 @@
 local ReplicationShared = require(script.Parent.Parent)
 
-local noYielding = require(script.Parent.Parent.Parent.Parent.noYielding)
+local noYielding = require(script.Parent.Parent.Parent.Parent.Util.noYielding)
 
 export type ChannelRead<T> = (player: Player, context: any) -> T
 

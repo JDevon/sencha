@@ -1,15 +1,15 @@
 local RunService = game:GetService("RunService")
 
-local Cleanup = require(script.Parent.Parent.Parent.Cleanup)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local gt = require(script.Parent.Parent.Parent.Parent.GreenTea)
 local RemoteLoader = require(script.Parent.Parent.RemoteLoader)
+local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local Signal = require(script.Parent.Parent.Parent.Parent.Signal)
-local DefineHooks = require(script.Parent.Parent.Parent.DefineHooks)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
+local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
 
-local toDisconnect = require(script.Parent.Parent.Parent.toDisconnect)
+local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
 
 --[=[
 	@class Event

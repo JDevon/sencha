@@ -1,6 +1,6 @@
 local RunService = game:GetService("RunService")
 
-local DefineHooks = require(script.Parent.Parent.DefineHooks)
+local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.ObservableValue)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
