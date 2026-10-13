@@ -9,6 +9,7 @@ local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.Observ
 local ClientReplicator = require(script.Parent.Parent.Parent.ReplicationClient.ClientReplicator)
 local ReplicatorChannel = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
+local noYielding = require(script.Parent.Parent.Parent.Parent.noYielding)
 local toDisconnect = require(script.Parent.Parent.Parent.Parent.toDisconnect)
 local openChannel = require(script.Parent.Parent.Parent.ReplicationShared.openChannel)
 
@@ -50,6 +51,11 @@ export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 			get: (self: TemporaryPlayerReplicator<T, P>, player: Player?) -> T,
 			getAsync: (self: TemporaryPlayerReplicator<T, P>, player: Player?) -> T,
 			set: (self: TemporaryPlayerReplicator<T, P>, player: Player, value: T) -> (),
+			update: (
+				self: TemporaryPlayerReplicator<T, P>,
+				player: Player,
+				callback: (value: T) -> (boolean, T?)
+			) -> boolean,
 			applyIncrementalUpdate: (self: TemporaryPlayerReplicator<T, P>, player: Player, update: P) -> (),
 			observe: (self: TemporaryPlayerReplicator<T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
@@ -182,6 +188,44 @@ function TemporaryPlayerReplicator.set<T, P>(self: TemporaryPlayerReplicator<T, 
 		preparedValue,
 		oldValue
 	)
+end
+
+--[=[
+	@method update
+	@within TemporaryPlayerReplicator
+	@server
+
+	Calls `callback` with a player's current value. If it returns `true` and a new value, the value is set as with
+	[TemporaryPlayerReplicator:set]; if it returns `false`, nothing changes. Returns what `callback` returned first.
+
+	`callback` must not yield, so nothing else can change the value between reading and setting it.
+
+	```lua
+	local didBuy = CurrencyNetwork.coinsReplicator:update(player, function(coins)
+		if coins < 10 then
+			return false
+		end
+		return true, coins - 10
+	end)
+	```
+
+	@param player Player
+	@param callback (value: T) -> (boolean, T?)
+	@return boolean
+]=]
+function TemporaryPlayerReplicator.update<T, P>(
+	self: TemporaryPlayerReplicator<T, P>,
+	player: Player,
+	callback: (value: T) -> (boolean, T?)
+): boolean
+	assert(RunService:IsServer(), `TemporaryPlayerReplicator:update can only be called on the server`)
+	local shouldSet, newValue = noYielding(callback, readValue(self, player))
+	if not shouldSet then
+		return false
+	end
+
+	self:set(player, newValue :: T)
+	return true
 end
 
 --[=[

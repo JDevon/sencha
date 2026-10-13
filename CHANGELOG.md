@@ -7,4 +7,5 @@
     per-player rate limits and rejected-call warnings.
   - Replicators: saved (from a saved source), `temporaryReplicator.player` and `temporaryReplicator.global`, with
     optional incremental updates.
+  - `update` on temporary replicators, for changing a value based on its current value without yielding.
   - `getObservable` on replicators, for use with ObservableValue and ReactObservableValue.

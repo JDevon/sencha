@@ -8,6 +8,7 @@ local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.Observ
 local ClientReplicator = require(script.Parent.Parent.Parent.ReplicationClient.ClientReplicator)
 local ReplicatorChannel = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
+local noYielding = require(script.Parent.Parent.Parent.Parent.noYielding)
 local toDisconnect = require(script.Parent.Parent.Parent.Parent.toDisconnect)
 local openChannel = require(script.Parent.Parent.Parent.ReplicationShared.openChannel)
 
@@ -40,6 +41,7 @@ export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 			get: (self: TemporaryGlobalReplicator<T, P>) -> T,
 			getAsync: (self: TemporaryGlobalReplicator<T, P>) -> T,
 			set: (self: TemporaryGlobalReplicator<T, P>, value: T) -> (),
+			update: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> (boolean, T?)) -> boolean,
 			applyIncrementalUpdate: (self: TemporaryGlobalReplicator<T, P>, update: P) -> (),
 			observe: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
@@ -152,6 +154,42 @@ function TemporaryGlobalReplicator.set<T, P>(self: TemporaryGlobalReplicator<T, 
 		preparedValue,
 		oldValue
 	)
+end
+
+--[=[
+	@method update
+	@within TemporaryGlobalReplicator
+	@server
+
+	Calls `callback` with the current value. If it returns `true` and a new value, the value is set as with
+	[TemporaryGlobalReplicator:set]; if it returns `false`, nothing changes. Returns what `callback` returned first.
+
+	`callback` must not yield, so nothing else can change the value between reading and setting it.
+
+	```lua
+	local didStart = EventsNetwork.meteorShowerReplicator:update(function(isActive)
+		if isActive then
+			return false
+		end
+		return true, true
+	end)
+	```
+
+	@param callback (value: T) -> (boolean, T?)
+	@return boolean
+]=]
+function TemporaryGlobalReplicator.update<T, P>(
+	self: TemporaryGlobalReplicator<T, P>,
+	callback: (value: T) -> (boolean, T?)
+): boolean
+	assert(RunService:IsServer(), `TemporaryGlobalReplicator:update can only be called on the server`)
+	local shouldSet, newValue = noYielding(callback, self.value)
+	if not shouldSet then
+		return false
+	end
+
+	self:set(newValue :: T)
+	return true
 end
 
 --[=[
