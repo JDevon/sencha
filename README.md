@@ -50,12 +50,12 @@ local Sencha = require(ReplicatedStorage.Packages.Sencha)
 local gt = require(ReplicatedStorage.Packages.GreenTea)
 
 return Sencha.define(script, {
-	-- remotes
-	buyItemRemote = Sencha.func(gt.args(gt.string()), gt.returns(gt.boolean())),
+    -- remotes
+    buyItemRemote = Sencha.func(gt.args(gt.string()), gt.returns(gt.boolean())),
 
-	-- replicators
-	coinsReplicator = Sencha.temporaryReplicator.player(gt.number(), 0),
-	shopDiscountReplicator = Sencha.temporaryReplicator.global(gt.number(), 0), -- a store-wide sale every player sees
+    -- replicators
+    coinsReplicator = Sencha.temporaryReplicator.player(gt.number(), 0),
+    shopDiscountReplicator = Sencha.temporaryReplicator.global(gt.number(), 0), -- a store-wide sale every player sees
 })
 ```
 
@@ -65,12 +65,12 @@ replicators on both sides.
 ```lua
 -- server
 CurrencyNetwork.buyItemRemote:onServerInvoke(function(player, itemId)
-	return CurrencyNetwork.coinsReplicator:tryUpdate(player, function(coins)
-		if coins < 10 then
-			return false
-		end
-		return true, coins - 10
-	end)
+    return CurrencyNetwork.coinsReplicator:tryUpdate(player, function(coins)
+        if coins < 10 then
+            return false
+        end
+        return true, coins - 10
+    end)
 end)
 
 -- client
@@ -78,7 +78,7 @@ Sencha.waitForReplicators() -- once, while loading
 
 print(CurrencyNetwork.coinsReplicator:get())
 CurrencyNetwork.coinsReplicator:onChanged(function(_player, newCoins, oldCoins)
-	print(`coins went from {oldCoins} to {newCoins}`)
+    print(`coins went from {oldCoins} to {newCoins}`)
 end)
 local bought = CurrencyNetwork.buyItemRemote:invokeServer("sword")
 ```
@@ -165,8 +165,8 @@ Use `getObservable` with [ReactObservableValue](https://github.com/JDevon/react-
 
 ```lua
 local function CoinsLabel()
-	local coins = ReactObservableValue.useObservableValue(CurrencyNetwork.coinsReplicator:getObservable())
-	return React.createElement("TextLabel", { Text = `{coins} coins` })
+    local coins = ReactObservableValue.useObservableValue(CurrencyNetwork.coinsReplicator:getObservable())
+    return React.createElement("TextLabel", { Text = `{coins} coins` })
 end
 ```
 
@@ -184,7 +184,7 @@ return Sencha.savedSource("PlayerData", PlayerDataTypes.PlayerData)
 
 -- in a network module
 researchReplicator = PlayerDataSource:replicator(gt.array(gt.string()), function(playerData)
-	return playerData.research
+    return playerData.research
 end),
 ```
 
@@ -196,8 +196,8 @@ On the server, connect each source to its store. Sencha doesn't depend on any sp
 ```lua
 -- a fetch function that yields until the player's data has loaded, or returns nil if it never loads
 PlayerDataSource:setFetchFunction(function(player)
-	local didLoad, playerData = PlayerDataServer.waitForPlayerData(player)
-	return if didLoad then playerData else nil
+    local didLoad, playerData = PlayerDataServer.waitForPlayerData(player)
+    return if didLoad then playerData else nil
 end)
 
 -- in the store's change callback, including the first load (oldData is nil)
@@ -218,12 +218,12 @@ By default every change sends the whole value. For large values that change a li
 ```lua
 -- temporary: send patches with applyIncrementalUpdate
 exportLogReplicator = Sencha.temporaryReplicator.player(ExportTypes.ExportLog, {}, {
-	patchType = ExportTypes.ExportLog, -- the entries just exported
-	apply = function(log, newEntries)
-		local newLog = table.clone(log)
-		table.move(newEntries, 1, #newEntries, #newLog + 1, newLog)
-		return newLog
-	end,
+    patchType = ExportTypes.ExportLog, -- the entries just exported
+    apply = function(log, newEntries)
+        local newLog = table.clone(log)
+        table.move(newEntries, 1, #newEntries, #newLog + 1, newLog)
+        return newLog
+    end,
 }),
 
 -- then on the server, only the new entry is sent, not the whole log
@@ -231,11 +231,11 @@ ExportNetwork.exportLogReplicator:applyIncrementalUpdate(player, { exportedEntry
 
 -- saved: the server works out each patch itself with diff
 backpackReplicator = PlayerDataSource:replicator(InventoryTypes.Items, function(playerData)
-	return playerData.backpack
+    return playerData.backpack
 end, {
-	patchType = InventoryTypes.ItemsDiff,
-	diff = InventoryUtil.diffItems, -- (newValue, oldValue) -> patch
-	apply = InventoryUtil.applyItemsDiff, -- (value, patch) -> newValue
+    patchType = InventoryTypes.ItemsDiff,
+    diff = InventoryUtil.diffItems, -- (newValue, oldValue) -> patch
+    apply = InventoryUtil.applyItemsDiff, -- (value, patch) -> newValue
 }),
 ```
 
@@ -267,20 +267,20 @@ partyReplicator = Sencha.temporaryReplicator.player(PartyTypes.PartyState, Party
 
 -- server
 local function syncParty(party)
-	for _, member in party.members do
-		PartyNetwork.partyReplicator:set(member, party.state)
-	end
+    for _, member in party.members do
+        PartyNetwork.partyReplicator:set(member, party.state)
+    end
 end
 
 local function onJoin(party, player)
-	table.insert(party.members, player)
-	syncParty(party)
+    table.insert(party.members, player)
+    syncParty(party)
 end
 
 local function onLeave(party, player)
-	table.remove(party.members, table.find(party.members, player))
-	PartyNetwork.partyReplicator:set(player, PartyTypes.NO_PARTY)
-	syncParty(party)
+    table.remove(party.members, table.find(party.members, player))
+    PartyNetwork.partyReplicator:set(player, PartyTypes.NO_PARTY)
+    syncParty(party)
 end
 ```
 
@@ -304,16 +304,16 @@ MobTypes.MobMap = gt.build(gt.dictionary(gt.string(), MobTypes.MobState:type()))
 MobTypes.MobPatch = gt.build(gt.dictionary(gt.string(), gt.union(MobTypes.MobState:type(), gt.literal(false))))
 
 function MobTypes.applyPatch(mobs, patch)
-	local newMobs = table.clone(mobs)
-	for mobId, mobState in patch do
-		newMobs[mobId] = if mobState == false then nil else mobState
-	end
-	return newMobs
+    local newMobs = table.clone(mobs)
+    for mobId, mobState in patch do
+        newMobs[mobId] = if mobState == false then nil else mobState
+    end
+    return newMobs
 end
 
 visibleMobsReplicator = Sencha.temporaryReplicator.player(MobTypes.MobMap, {}, {
-	patchType = MobTypes.MobPatch,
-	apply = MobTypes.applyPatch,
+    patchType = MobTypes.MobPatch,
+    apply = MobTypes.applyPatch,
 }),
 ```
 
@@ -326,26 +326,26 @@ local mobs: { [string]: { state: MobState, model: Model } } = {} -- the full tab
 
 -- run for each player periodically: adds mobs that came into range and removes ones that left
 local function updateVisibility(player: Player)
-	local visible = MobNetwork.visibleMobsReplicator:get(player)
-	local patch = {}
-	for mobId, mob in mobs do
-		local inRange = isInRange(player, mob)
-		if inRange and not visible[mobId] then
-			patch[mobId] = mob.state
-		elseif not inRange and visible[mobId] then
-			patch[mobId] = false
-		end
-	end
-	MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, patch) -- an empty patch does nothing
+    local visible = MobNetwork.visibleMobsReplicator:get(player)
+    local patch = {}
+    for mobId, mob in mobs do
+        local inRange = isInRange(player, mob)
+        if inRange and not visible[mobId] then
+            patch[mobId] = mob.state
+        elseif not inRange and visible[mobId] then
+            patch[mobId] = false
+        end
+    end
+    MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, patch) -- an empty patch does nothing
 end
 
 -- sends a change only to the players who can see that mob
 local function sendToViewers(mobId: string, value: MobState | false)
-	for _, player in Players:GetPlayers() do
-		if MobNetwork.visibleMobsReplicator:get(player)[mobId] then
-			MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, { [mobId] = value })
-		end
-	end
+    for _, player in Players:GetPlayers() do
+        if MobNetwork.visibleMobsReplicator:get(player)[mobId] then
+            MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, { [mobId] = value })
+        end
+    end
 end
 ```
 
@@ -357,19 +357,19 @@ patch that says exactly what changed:
 local visibleMobsReplicator = MobNetwork.visibleMobsReplicator
 
 for mobId, mobState in visibleMobsReplicator:get() do
-	MobVisuals.spawn(mobId, mobState)
+    MobVisuals.spawn(mobId, mobState)
 end
 
 visibleMobsReplicator:onUpdateReceived(function(_mobs, oldMobs, patch)
-	for mobId, mobState in patch do
-		if mobState == false then
-			MobVisuals.remove(mobId)
-		elseif oldMobs[mobId] then
-			MobVisuals.update(mobId, mobState)
-		else
-			MobVisuals.spawn(mobId, mobState)
-		end
-	end
+    for mobId, mobState in patch do
+        if mobState == false then
+            MobVisuals.remove(mobId)
+        elseif oldMobs[mobId] then
+            MobVisuals.update(mobId, mobState)
+        else
+            MobVisuals.spawn(mobId, mobState)
+        end
+    end
 end)
 ```
 
