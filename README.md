@@ -65,7 +65,7 @@ replicators on both sides.
 ```lua
 -- server
 CurrencyNetwork.buyItemRemote:onServerInvoke(function(player, itemId)
-	return CurrencyNetwork.coinsReplicator:update(player, function(coins)
+	return CurrencyNetwork.coinsReplicator:tryUpdate(player, function(coins)
 		if coins < 10 then
 			return false
 		end
@@ -140,7 +140,7 @@ replicator, so the server always chooses what becomes public.
 | `getAsync` | both | yields until the value is available, then returns it |
 | `onChanged` | both | fires on changes, not for the first value |
 | `set` / `applyIncrementalUpdate` | server, temporary only | changes the value and sends it to clients |
-| `update` | server, temporary only | calls a function with the current value, and sets what it returns if it returns `true` |
+| `tryUpdate` | server, temporary only | calls a function with the current value, and sets what it returns if it returns `true` |
 | `observe` | client | fires right away if the value has arrived (otherwise when it arrives), then on every change |
 | `getObservable` | client | returns an [ObservableValue](https://github.com/JDevon/observable-value) that follows the value |
 | `isLoaded` | client | whether the value has arrived |
@@ -155,7 +155,7 @@ On the server, player replicators take the player as their first argument (`get(
   reaches clients after the change that caused it.
 - **`set` errors at the caller** if the value doesn't match the replicator's type. Setting a primitive to the value it
   already has does nothing. Tables always count as a change.
-- **`update` can't yield.** Its function runs without yielding, so nothing else can change the value between
+- **`tryUpdate` can't yield.** Its function runs without yielding, so nothing else can change the value between
   reading and setting it. A yield errors.
 - **Values are frozen** on both sides.
 

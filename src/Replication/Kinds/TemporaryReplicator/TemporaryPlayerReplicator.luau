@@ -51,7 +51,7 @@ export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 			get: (self: TemporaryPlayerReplicator<T, P>, player: Player?) -> T,
 			getAsync: (self: TemporaryPlayerReplicator<T, P>, player: Player?) -> T,
 			set: (self: TemporaryPlayerReplicator<T, P>, player: Player, value: T) -> (),
-			update: (
+			tryUpdate: (
 				self: TemporaryPlayerReplicator<T, P>,
 				player: Player,
 				callback: (value: T) -> (boolean, T?)
@@ -192,7 +192,7 @@ function TemporaryPlayerReplicator.set<T, P>(self: TemporaryPlayerReplicator<T, 
 end
 
 --[=[
-	@method update
+	@method tryUpdate
 	@within TemporaryPlayerReplicator
 	@server
 
@@ -202,7 +202,7 @@ end
 	`callback` must not yield, so nothing else can change the value between reading and setting it.
 
 	```lua
-	local didBuy = CurrencyNetwork.coinsReplicator:update(player, function(coins)
+	local didBuy = CurrencyNetwork.coinsReplicator:tryUpdate(player, function(coins)
 		if coins < 10 then
 			return false
 		end
@@ -214,12 +214,12 @@ end
 	@param callback (value: T) -> (boolean, T?)
 	@return boolean
 ]=]
-function TemporaryPlayerReplicator.update<T, P>(
+function TemporaryPlayerReplicator.tryUpdate<T, P>(
 	self: TemporaryPlayerReplicator<T, P>,
 	player: Player,
 	callback: (value: T) -> (boolean, T?)
 ): boolean
-	assert(RunService:IsServer(), `TemporaryPlayerReplicator:update can only be called on the server`)
+	assert(RunService:IsServer(), `TemporaryPlayerReplicator:tryUpdate can only be called on the server`)
 	local shouldSet, newValue = noYielding(callback, readValue(self, player))
 	if not shouldSet then
 		return false

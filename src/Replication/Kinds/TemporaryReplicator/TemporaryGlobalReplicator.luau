@@ -41,7 +41,7 @@ export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 			get: (self: TemporaryGlobalReplicator<T, P>) -> T,
 			getAsync: (self: TemporaryGlobalReplicator<T, P>) -> T,
 			set: (self: TemporaryGlobalReplicator<T, P>, value: T) -> (),
-			update: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> (boolean, T?)) -> boolean,
+			tryUpdate: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> (boolean, T?)) -> boolean,
 			applyIncrementalUpdate: (self: TemporaryGlobalReplicator<T, P>, update: P) -> (),
 			observe: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
@@ -158,7 +158,7 @@ function TemporaryGlobalReplicator.set<T, P>(self: TemporaryGlobalReplicator<T, 
 end
 
 --[=[
-	@method update
+	@method tryUpdate
 	@within TemporaryGlobalReplicator
 	@server
 
@@ -168,7 +168,7 @@ end
 	`callback` must not yield, so nothing else can change the value between reading and setting it.
 
 	```lua
-	local didStart = EventsNetwork.meteorShowerReplicator:update(function(isActive)
+	local didStart = EventsNetwork.meteorShowerReplicator:tryUpdate(function(isActive)
 		if isActive then
 			return false
 		end
@@ -179,11 +179,11 @@ end
 	@param callback (value: T) -> (boolean, T?)
 	@return boolean
 ]=]
-function TemporaryGlobalReplicator.update<T, P>(
+function TemporaryGlobalReplicator.tryUpdate<T, P>(
 	self: TemporaryGlobalReplicator<T, P>,
 	callback: (value: T) -> (boolean, T?)
 ): boolean
-	assert(RunService:IsServer(), `TemporaryGlobalReplicator:update can only be called on the server`)
+	assert(RunService:IsServer(), `TemporaryGlobalReplicator:tryUpdate can only be called on the server`)
 	local shouldSet, newValue = noYielding(callback, self.value)
 	if not shouldSet then
 		return false
