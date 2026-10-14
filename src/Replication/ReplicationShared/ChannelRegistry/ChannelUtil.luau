@@ -50,6 +50,31 @@ function ChannelUtil.copyAndFreeze<T>(value: T): T
 	return table.freeze(copy) :: any
 end
 
+function ChannelUtil.deepEqual(a: any, b: any): boolean
+	-- NaN is the only value not equal to itself, so it's matched separately
+	if a == b or (a ~= a and b ~= b) then
+		return true
+	end
+
+	if type(a) ~= "table" or type(b) ~= "table" then
+		return false
+	end
+
+	for key, value in a do
+		if not ChannelUtil.deepEqual(value, b[key]) then
+			return false
+		end
+	end
+
+	for key in b do
+		if a[key] == nil then
+			return false
+		end
+	end
+	
+	return true
+end
+
 function ChannelUtil.freezeInPlace(value: any)
 	if type(value) ~= "table" or table.isfrozen(value) then
 		return

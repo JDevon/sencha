@@ -136,7 +136,7 @@ function ReplicationServer._validateSerialization(channel: ChannelRegistry.Chann
 	local issue = RemoteSerialization.findIssue(data)
 	if issue then
 		reportedSerializationIssues[reportKey] = true
-		warn(`Replicator {channel.key}'s {label} will not arrive intact on the client: {issue}`)
+		warn(`Replicator {channel.key}'s {label} may not arrive intact on the client: {issue}`)
 	end
 end
 
@@ -226,19 +226,6 @@ function ReplicationServer._tryFetchAsync(player: Player): (boolean, Replication
 	return true, snapshot
 end
 
-function ReplicationServer._resyncAsync(player: Player, key: string)
-	if not readyPlayers[player] then
-		return
-	end
-
-	local channel = ChannelRegistry.getChannel(key)
-	if not channel then
-		return
-	end
-
-	ReplicationServer._publishCurrentAsync(channel, player)
-end
-
 -- start
 if RunService:IsServer() and RunService:IsRunning() then
 	DefineHooks.run(
@@ -251,14 +238,8 @@ if RunService:IsServer() and RunService:IsRunning() then
 		ReplicationShared.STREAM_REMOTE_NAME,
 		ReplicationShared.SENCHA_MODULE
 	)
-	DefineHooks.run(
-		ReplicationShared.resyncRemote,
-		ReplicationShared.RESYNC_REMOTE_NAME,
-		ReplicationShared.SENCHA_MODULE
-	)
 
 	ReplicationShared.fetchRemote:onServerInvoke(ReplicationServer._tryFetchAsync)
-	ReplicationShared.resyncRemote:onServerEvent(ReplicationServer._resyncAsync)
 
 	Players.PlayerRemoving:Connect(function(player)
 		readyPlayers[player] = nil

@@ -7,8 +7,13 @@ local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.Observ
 local ChannelRegistry = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry)
 local ReplicationShared = require(script.Parent.Parent.Parent.Parent.Replication.ReplicationShared)
 local ReplicationServer = require(script.Parent.Parent.Parent.Parent.Replication.ReplicationServer)
+local ChannelUtil = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ChannelUtil)
 
 local toDisconnect = require(script.Parent.Parent.Parent.Parent.Util.toDisconnect)
+local reportFailure = require(script.Parent.Parent.Parent.Parent.Util.reportFailure)
+
+-- replicators whose diff and apply have been reported as not matching, so live games warn once per replicator
+local reportedDiffIssues: { [string]: true } = {}
 
 type FetchAsync<D> = (player: Player) -> D?
 
@@ -62,6 +67,32 @@ local sourcesByName: { [string]: true } = {}
 ]=]
 local SavedSource = {}
 SavedSource.__index = SavedSource
+
+local function reportDiffIssue(channel: ChannelRegistry.Channel, message: string)
+	if not RunService:IsStudio() then
+		if reportedDiffIssues[channel.key] then
+			return
+		end
+		reportedDiffIssues[channel.key] = true
+		message ..= "\nFurther mismatches for this replicator won't be reported."
+	end
+	reportFailure(message)
+end
+
+local function checkDiff(channel: ChannelRegistry.Channel, newValue: any, oldValue: any, diff: any, isEmpty: boolean)
+	local ok, applied = pcall(function()
+		return if isEmpty then oldValue else (channel.incrementalConfig :: any).apply(oldValue, diff)
+	end)
+	if not ok then
+		reportDiffIssue(channel, `Saved replicator {channel.key}'s apply errored on a patch from its diff:\n{applied}`)
+	elseif not ChannelUtil.deepEqual(applied, newValue) then
+		reportDiffIssue(
+			channel,
+			`Saved replicator {channel.key}'s apply doesn't match its diff: apply(oldValue, diff(newValue, oldValue))`
+				.. ` gave a different value than newValue, so clients would end up with a different value than the server.`
+		)
+	end
+end
 
 local function validateSavedData(self: any, data: any, from: string)
 	if not RunService:IsStudio() or self.hasReportedInvalidSavedData or data == nil then
@@ -216,7 +247,9 @@ function SavedSource.replicateChanges<D>(self: SavedSource<D>, player: Player, n
 			local savedIncrementalConfig =
 				channel.incrementalConfig :: ReplicationShared.SavedIncrementalConfig<any, any>
 			local diff = savedIncrementalConfig.diff(newValue, oldValue)
-			if diff ~= nil and not (type(diff) == "table" and next(diff) == nil) then
+			local isEmpty = diff == nil or (type(diff) == "table" and next(diff) == nil)
+			checkDiff(channel, newValue, oldValue, diff, isEmpty)
+			if not isEmpty then
 				local validatedPayload = ReplicationServer.getValidatedPayload(channel, diff, "patch")
 				if validatedPayload then
 					ReplicationServer.publish(channel, player, validatedPayload)

@@ -99,9 +99,9 @@ function ReplicatorChannel.receiveUpdate<T, P>(self: ReplicatorChannel<T, P>, up
 	local oldValue = self.observable:get()
 	local newValue, patchFailure = self:applyPatch(oldValue, update)
 	if not newValue then
-		-- a bad patch here means the server and client disagree, so it is dropped and the client resyncs.
-		-- reportFailure doesn't stop this thread, so the rest of the snapshot and buffered messages still apply
-		reportFailure(`{patchFailure}\nThe client will request the full value again.`)
+		-- a bad patch here means the server and client disagree. reportFailure doesn't stop this thread, so the
+		-- rest of the snapshot and buffered messages still apply
+		reportFailure(`{patchFailure}\nFurther patches are ignored until the server sends a whole value.`)
 		return false
 	end
 

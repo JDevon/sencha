@@ -329,7 +329,7 @@ end
 	Calls `callback` for each patch received, after the value is updated. Only replicators with an incremental
 	config receive patches; calling this on one without errors.
 
-	Whole values (the first value, a `set`, or a resync) don't fire this; use
+	Whole values (the first value, or a `set`) don't fire this; use
 	[TemporaryPlayerReplicator:onChanged] to see every change.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()

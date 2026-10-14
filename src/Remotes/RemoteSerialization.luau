@@ -1,5 +1,8 @@
 local RemoteSerialization = {}
 
+local INSTANCE_ISSUE = "is an Instance, which arrives as nil on clients that haven't streamed it in. "
+	.. "InstanceHandles are recommended for this use case: https://create.roblox.com/docs/reference/engine/datatypes/InstanceHandle"
+
 local function childPath(path: string, key: any): string
 	if type(key) == "string" then
 		return `{path}.{key}`
@@ -11,6 +14,8 @@ local function findIssueAt(value: any, path: string, ancestors: { [any]: true })
 	local valueType = typeof(value)
 	if valueType == "function" or valueType == "thread" then
 		return `{path} is a {valueType}, which remotes cannot send`
+	elseif valueType == "Instance" then
+		return `{path} {INSTANCE_ISSUE}`
 	end
 
 	if valueType ~= "table" then
@@ -108,6 +113,8 @@ local function findTypeIssueAt(gtType: any, path: string, visited: { [any]: true
 		return `{path} is a function, which remotes cannot send`
 	elseif kind == "thread" then
 		return `{path} is a thread, which remotes cannot send`
+	elseif kind == "InstanceIsA" or (kind == "basic" and gtType.basic.typeof == "Instance") then
+		return `{path} {INSTANCE_ISSUE}`
 	elseif kind == "union" or kind == "intersection" then
 		for _, option in gtType[kind].contents do
 			local issue = findTypeIssueAt(option, path, visited)

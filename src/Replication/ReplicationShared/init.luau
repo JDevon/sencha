@@ -17,7 +17,6 @@ local ReplicationShared = {}
 ReplicationShared.SENCHA_MODULE = script.Parent.Parent
 ReplicationShared.FETCH_REMOTE_NAME = "ReplicationFetch"
 ReplicationShared.STREAM_REMOTE_NAME = "ReplicationStream"
-ReplicationShared.RESYNC_REMOTE_NAME = "ReplicationResync"
 
 -- values are wrapped so nil values survive being placed in the snapshot table
 local payloadKinds = gt.build(gt.union(gt.literal("value"), gt.literal("patch")))
@@ -41,6 +40,5 @@ ReplicationShared.fetchRemote = RemoteFunction.new(
 ):rateLimit({ burst = 5, perSecond = 2 })
 ReplicationShared.streamRemote =
 	RemoteEvent.new(gt.number({ integer = true }), payload:type(), gt.optional(gt.string()))
-ReplicationShared.resyncRemote = RemoteEvent.new(gt.string()):rateLimit({ burst = 5, perSecond = 1 })
 
 return ReplicationShared

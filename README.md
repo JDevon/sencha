@@ -55,7 +55,7 @@ return Sencha.define(script, {
 
 	-- replicators
 	coinsReplicator = Sencha.temporaryReplicator.player(gt.number(), 0),
-	meteorShowerReplicator = Sencha.temporaryReplicator.global(gt.boolean(), false),
+	shopDiscountReplicator = Sencha.temporaryReplicator.global(gt.number(), 0), -- a store-wide sale every player sees
 })
 ```
 
@@ -243,9 +243,12 @@ end, {
   never edit its input, since values are frozen.
 - For saved replicators, `apply(old, diff(new, old))` must equal `new`.
 - Players who join, and replicators defined later, always get a full value first.
-- If a patch fails on the client, it asks the server for the full value again and ignores patches until it arrives.
-  A failed patch means a bug, like an `apply` that gives different results on each side, so it errors in Studio and
-  warns in live games.
+- After the first value, an incremental replicator only sends patches, unless a temporary replicator's `set` sends a
+  whole value.
+- A patch failing on the client means a bug, like an `apply` that gives different results on each side. It errors in
+  Studio and warns in live games, and the client ignores that replicator's patches until the server sends a whole
+  value. The server also checks that each saved replicator's `apply` matches its `diff`: in Studio a mismatch errors,
+  and in live games it warns once per replicator.
 - `onUpdateReceived` only fires for patches. Use `onChanged` to see every change.
 
 ## Patterns
@@ -284,6 +287,10 @@ end
 Groups can be created and removed at any time. Keep every change to a group going through one function like
 `syncParty`, so no member is missed.
 
+For large group values, send only what changed: give the replicator an incremental config, send each new member the
+full value once with `set`, then send every change to all members with `applyIncrementalUpdate`. See
+[Interest management](#interest-management) for an example of patches sent to individual players.
+
 ### Interest management
 
 To send each player only part of a large table, like the mobs near them, give each player their own view of the table
@@ -310,71 +317,64 @@ visibleMobsReplicator = Sencha.temporaryReplicator.player(MobTypes.MobMap, {}, {
 }),
 ```
 
+Each player's value in the replicator is exactly the set of mobs they can see, so the server reads it with `get(player)`
+instead of keeping its own record:
+
 ```lua
 -- server
-local mobs: { [string]: { state: MobState, model: Model } } = {}
-local visibleByPlayer: { [Player]: { [string]: true } } = {}
+local mobs: { [string]: { state: MobState, model: Model } } = {} -- the full table, kept by the game
 
--- run for each player to patch their visible mobs replicated data
+-- run for each player periodically: adds mobs that came into range and removes ones that left
 local function updateVisibility(player: Player)
-	local visible = visibleByPlayer[player]
+	local visible = MobNetwork.visibleMobsReplicator:get(player)
 	local patch = {}
 	for mobId, mob in mobs do
 		local inRange = isInRange(player, mob)
 		if inRange and not visible[mobId] then
-			visible[mobId] = true
 			patch[mobId] = mob.state
 		elseif not inRange and visible[mobId] then
-			visible[mobId] = nil
 			patch[mobId] = false
 		end
 	end
-	MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, patch)
+	MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, patch) -- an empty patch does nothing
 end
 
 -- sends a change only to the players who can see that mob
 local function sendToViewers(mobId: string, value: MobState | false)
-	for player, visible in visibleByPlayer do
-		if visible[mobId] then
-			if value == false then
-				visible[mobId] = nil
-			end
+	for _, player in Players:GetPlayers() do
+		if MobNetwork.visibleMobsReplicator:get(player)[mobId] then
 			MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, { [mobId] = value })
 		end
 	end
 end
 ```
 
-On the client, compare each value with the one before it. `onChanged` passes both, and fires for patches and whole
-values (a `set`, or a resync) alike. Unchanged mobs are the same table, so `~=` finds the ones that changed:
+The client renders the first value once, then handles each patch as it arrives. Every change after the first value is a
+patch that says exactly what changed:
 
 ```lua
-local function syncMobVisuals(mobs, oldMobs)
-	for mobId, mobState in mobs do
-		if oldMobs[mobId] == nil then
-			MobVisuals.spawn(mobId, mobState)
-		elseif oldMobs[mobId] ~= mobState then
-			MobVisuals.update(mobId, mobState)
-		end
-	end
-	for mobId in oldMobs do
-		if mobs[mobId] == nil then
-			MobVisuals.remove(mobId)
-		end
-	end
+-- client
+local visibleMobsReplicator = MobNetwork.visibleMobsReplicator
+
+for mobId, mobState in visibleMobsReplicator:get() do
+	MobVisuals.spawn(mobId, mobState)
 end
 
-syncMobVisuals(MobNetwork.visibleMobsReplicator:get(), {}) -- after Sencha.waitForReplicators()
-MobNetwork.visibleMobsReplicator:onChanged(function(_player, mobs, oldMobs)
-	syncMobVisuals(mobs, oldMobs)
+visibleMobsReplicator:onUpdateReceived(function(_mobs, oldMobs, patch)
+	for mobId, mobState in patch do
+		if mobState == false then
+			MobVisuals.remove(mobId)
+		elseif oldMobs[mobId] then
+			MobVisuals.update(mobId, mobState)
+		else
+			MobVisuals.spawn(mobId, mobState)
+		end
+	end
 end)
 ```
 
-- **Keep positions out of the replicator.** Roblox already sends the movement of models in the workspace, and anything
-  that changes every frame belongs on an unreliable event.
-- **Hide mobs a little further out than you show them** (for example, show at 200 studs and hide at 220), so a mob at
-  the edge isn't added and removed over and over.
-- Each change is sent once to every player who can see it.
+- **Avoid `set` on this replicator.** `set` sends a whole value, which `onUpdateReceived` doesn't see, so the client's
+  visuals would fall out of step with its value. Send every change, including clearing a player's view, as a patch.
 
 ## Rules
 
@@ -384,14 +384,11 @@ end)
    `getAsync` / `observe` in code that may run earlier.
 3. **`get` doesn't yield, `getAsync` does.**
 4. **Remotes can't send every table.** Use string keys for dictionaries, and avoid arrays with gaps, mixed array and
-   string keys, and non-string keys. The server warns about types that can't be sent intact, and in Studio about values.
-5. **Lookups, `apply` and `diff` must not yield.** A yield errors with a traceback to the line that waited.
-
-## How it works
-
-All replicators share three remotes created under the Sencha module. When a client starts, it fetches a snapshot of
-every replicator's value once. The server takes the snapshot without yielding and marks the player ready in the same
-step, so no change can be missed. Changes after that are streamed to ready players with a short id instead of the
-replicator's name. Messages that arrive before the snapshot is applied are held and applied after it.
-
-Values for replicators whose modules the client hasn't required yet are kept until the module is required.
+   string keys, and non-string keys. The server warns when a replicator's type can't be sent intact. In Studio it also checks each value it sends, since some problems (such as an array with gaps) only show up in replicated values.
+5. **Avoid putting Instances in replicated values.** With StreamingEnabled, an Instance the client hasn't streamed in arrives
+   as `nil`. Send an [InstanceHandle](https://create.roblox.com/docs/reference/engine/datatypes/InstanceHandle)
+   instead. The server warns about replicator types that contain Instances.
+6. **Don't yield in a saved replicator's [lookup](https://jdevon.github.io/sencha/api/SavedSource#replicator), or in an
+   incremental config's `apply` or `diff`** ([saved](https://jdevon.github.io/sencha/api/Sencha#SavedIncrementalConfig),
+   [temporary](https://jdevon.github.io/sencha/api/Sencha#TemporaryIncrementalConfig)). A yield errors with a traceback
+   to the line that waited.

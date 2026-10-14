@@ -8,6 +8,7 @@
 		"getmetatable",
 		"isfrozen",
 		"metatable",
+		"pcall",
 		"resends",
 		"setmetatable",
 		"tostring"

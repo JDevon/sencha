@@ -10,16 +10,12 @@ local reportFailure = require(script.Parent.Parent.Util.reportFailure)
 local FETCH_RETRY_SECONDS = 0.5
 local SLOW_LOAD_WARNING_SECONDS = 5
 
-local RESYNC_BASE_DELAY_SECONDS = 2
-local RESYNC_MAX_DELAY_SECONDS = 30
-local RESYNC_WARN_AFTER_ATTEMPTS = 5
-
 local fetchStarted = false
 local initialFetchComplete = ObservableValue.new(false)
 -- for keys whose module the client hasn't required yet: the latest value, then patches received after it
 local latestPayloads: { [string]: ReplicationShared.ValuePayload } = {}
 local pendingPatches: { [string]: { any } } = {}
-local resyncingKeys: { [string]: number } = {}
+local failedKeys: { [string]: true } = {}
 local channelKeys: { [number]: string } = {}
 
 type StreamMessage = { id: number, payload: ReplicationShared.Payload, key: string? }
@@ -79,7 +75,7 @@ function ReplicationClient._initializeChannelValue(channel: ChannelRegistry.Chan
 	-- the module defining this replicator may be required after its value already arrived
 	local didReceive = channel:receive(payload.value)
 	if not didReceive then
-		ReplicationClient._requestResync(channel.key)
+		failedKeys[channel.key] = true
 		return
 	end
 
@@ -91,7 +87,7 @@ function ReplicationClient._initializeChannelValue(channel: ChannelRegistry.Chan
 	for _, patch in patches do
 		didReceive = channel:receiveUpdate(patch)
 		if not didReceive then
-			ReplicationClient._requestResync(channel.key)
+			failedKeys[channel.key] = true
 			break
 		end
 	end
@@ -132,12 +128,12 @@ function ReplicationClient._receiveValue(key: string, valuePayload: ReplicationS
 		pendingPatches[key] = nil
 	end
 
-	-- a full received value ensures we are no longer out of sync
-	resyncingKeys[key] = nil
+	-- patches apply again once the server sends a whole value
+	failedKeys[key] = nil
 end
 
 function ReplicationClient._receivePatch(key: string, patchPayload: ReplicationShared.PatchPayload)
-	if resyncingKeys[key] ~= nil then
+	if failedKeys[key] then
 		return
 	end
 
@@ -145,7 +141,7 @@ function ReplicationClient._receivePatch(key: string, patchPayload: ReplicationS
 	if channel then
 		local didReceive = channel:receiveUpdate(patchPayload.patch)
 		if not didReceive then
-			ReplicationClient._requestResync(key)
+			failedKeys[key] = true
 		end
 	else
 		-- held until the module is required, then applied after the stored value in arrival order
@@ -173,11 +169,6 @@ function ReplicationClient._startFetch()
 		DefineHooks.run(
 			ReplicationShared.fetchRemote,
 			ReplicationShared.FETCH_REMOTE_NAME,
-			ReplicationShared.SENCHA_MODULE
-		)
-		DefineHooks.run(
-			ReplicationShared.resyncRemote,
-			ReplicationShared.RESYNC_REMOTE_NAME,
 			ReplicationShared.SENCHA_MODULE
 		)
 
@@ -212,24 +203,6 @@ function ReplicationClient._startFetch()
 		end
 
 		initialFetchComplete:set(true)
-	end)
-end
-
-function ReplicationClient._requestResync(key: string, attempt: number?)
-	local thisAttempt = attempt or 1
-	local requestTime = os.clock()
-	resyncingKeys[key] = requestTime
-	ReplicationShared.resyncRemote:fireServer(key)
-
-	if thisAttempt == RESYNC_WARN_AFTER_ATTEMPTS then
-		warn(`Replicator {key} has failed to resync {thisAttempt} times; it will keep retrying with its value frozen`)
-	end
-
-	local delay = math.min(RESYNC_BASE_DELAY_SECONDS * 2 ^ (thisAttempt - 1), RESYNC_MAX_DELAY_SECONDS)
-	task.delay(delay, function()
-		if resyncingKeys[key] == requestTime then
-			ReplicationClient._requestResync(key, thisAttempt + 1)
-		end
 	end)
 end
 

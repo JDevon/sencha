@@ -189,7 +189,7 @@ end
 	Calls `callback` for each patch received, after the value is updated. Only replicators with an incremental
 	config receive patches; calling this on one without errors.
 
-	Whole values (the first value, or a resync) don't fire this; use [SavedReplicator:onChanged] to see every change.
+	The first value is a whole value, so it doesn't fire this; use [SavedReplicator:onChanged] to see every change.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
