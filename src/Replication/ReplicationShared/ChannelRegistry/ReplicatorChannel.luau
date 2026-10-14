@@ -6,6 +6,8 @@ local gt = require(script.Parent.Parent.Parent.Parent.Parent.GreenTea)
 local Signal = require(script.Parent.Parent.Parent.Parent.Parent.Signal)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
 
+local reportFailure = require(script.Parent.Parent.Parent.Parent.Util.reportFailure)
+
 export type ReplicatorChannelConfig<T, P> = {
 	kind: string,
 	valueType: T,
@@ -72,7 +74,7 @@ function ReplicatorChannel.receive<T, P>(self: ReplicatorChannel<T, P>, value: a
 	assert(RunService:IsClient(), "Replicators can only receive values on the client.")
 	local ok, cause = self.typechecker:matches(value)
 	if not ok then
-		warn(`Replicator {self.key} received a value that does not match its type:\n{cause:formatErr()}`)
+		reportFailure(`Replicator {self.key} received a value that does not match its type:\n{cause:formatErr()}`)
 		return false
 	end
 
@@ -90,16 +92,16 @@ function ReplicatorChannel.receiveUpdate<T, P>(self: ReplicatorChannel<T, P>, up
 	)
 
 	if not self.loaded:get() then
-		warn(`Replicator {self.key} received a patch before its value; the patch was dropped`)
+		reportFailure(`Replicator {self.key} received a patch before its value; the patch was dropped`)
 		return false
 	end
 
 	local oldValue = self.observable:get()
 	local newValue, patchFailure = self:applyPatch(oldValue, update)
 	if not newValue then
-		-- a bad patch here means the server and client disagree; erroring would also stop the transport from
-		-- applying the rest of the snapshot and buffered messages, so it is reported and dropped instead
-		warn(patchFailure)
+		-- a bad patch here means the server and client disagree, so it is dropped and the client resyncs.
+		-- reportFailure doesn't stop this thread, so the rest of the snapshot and buffered messages still apply
+		reportFailure(`{patchFailure}\nThe client will request the full value again.`)
 		return false
 	end
 

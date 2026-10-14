@@ -138,8 +138,8 @@ end
 	@within FunctionSwitchboard
 	@server
 
-	Sets the rate limit for calls to each port from each player, replacing the default of 60 at once and 30 per second. Returns
-	the same switchboard, so it can be chained where it's created. Errors if the limit is invalid.
+	Sets the rate limit for calls to each port from each player, replacing the default of 60 at once and 30 per second.
+	Returns the same switchboard, so it can be chained where it's created. Errors if the limit is invalid.
 
 	```lua
 	shopSwitchboard = Sencha.funcSwitchboard(gt.args(gt.number()), gt.returns(gt.boolean())):rateLimit({ burst = 5, perSecond = 2 }),

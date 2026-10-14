@@ -182,7 +182,7 @@ end
 	@server
 
 	Tells the source that a player's saved data changed, including when it first loads (`oldData` is `nil`). Each
-	replicator whose part changed sends it to the player, then fires its `onChanged`. Call it from your store's
+	replicator whose part changed sends it to the player, then fires its `onChanged`. Call this from your store's
 	change callback.
 
 	```lua

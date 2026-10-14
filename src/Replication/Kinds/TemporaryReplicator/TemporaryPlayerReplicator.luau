@@ -141,7 +141,8 @@ end
 	@within TemporaryPlayerReplicator
 	@yields
 
-	Returns the current value, yielding until it's available. Server values always exist, so it only yields on the client.
+	Returns the current value, yielding until it's available. Server values always exist, so this only yields on the
+	client.
 
 	@param player Player? -- required on the server, left out on the client
 	@return T
@@ -279,7 +280,8 @@ end
 	@method onChanged
 	@within TemporaryPlayerReplicator
 
-	Calls `callback` when the value changes, not for the initial value. On the server it fires for any player whose value changes; on the client `player` is always the local player.
+	Calls `callback` when the value changes, not for the initial value. On the server this fires for any player whose
+	value changes; on the client `player` is always the local player.
 
 	On the server, the change is sent to clients before `callback` runs, so anything it changes in response reaches
 	clients after the change that caused it.
@@ -327,8 +329,8 @@ end
 	Calls `callback` for each patch received, after the value is updated. Only replicators with an incremental
 	config receive patches; calling this on one without errors.
 
-	Full values (the first value, a `set`, or a resync) only fire [TemporaryPlayerReplicator:onChanged], so use that to see every
-	change.
+	Whole values (the first value, a `set`, or a resync) don't fire this; use
+	[TemporaryPlayerReplicator:onChanged] to see every change.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -348,7 +350,7 @@ end
 
 	Returns an [ObservableValue](https://jdevon.github.io/observable-value/) that follows the replicated value,
 	for code that works with ObservableValues, like the
-	[ReactObservableValue](https://github.com/JDevon/react-observable-value) hooks. Calling it again returns the same
+	[ReactObservableValue](https://github.com/JDevon/react-observable-value) hooks. Calling this again returns the same
 	one. Setting it doesn't change the replicated value. Errors if the value hasn't arrived yet.
 
 	```lua

@@ -5,6 +5,8 @@ local ReplicationShared = require(script.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.ObservableValue)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
 
+local reportFailure = require(script.Parent.Parent.Util.reportFailure)
+
 local FETCH_RETRY_SECONDS = 0.5
 local SLOW_LOAD_WARNING_SECONDS = 5
 
@@ -102,7 +104,7 @@ function ReplicationClient._receiveFromStream(id: number, payload: ReplicationSh
 
 	local resolvedKey = channelKeys[id]
 	if not resolvedKey then
-		warn(`Received a replicator message for unknown id {id}; it was dropped`)
+		reportFailure(`Received a replicator message for unknown id {id}; it was dropped`)
 		return
 	end
 

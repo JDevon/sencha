@@ -115,7 +115,8 @@ end
 	@within TemporaryGlobalReplicator
 	@yields
 
-	Returns the current value, yielding until it's available. The server value always exists, so it only yields on the client.
+	Returns the current value, yielding until it's available. The server value always exists, so this only yields on the
+	client.
 
 	@return T
 ]=]
@@ -283,8 +284,8 @@ end
 	Calls `callback` for each patch received, after the value is updated. Only replicators with an incremental
 	config receive patches; calling this on one without errors.
 
-	Full values (the first value, a `set`, or a resync) only fire [TemporaryGlobalReplicator:onChanged], so use that to see every
-	change.
+	Whole values (the first value, a `set`, or a resync) don't fire this; use
+	[TemporaryGlobalReplicator:onChanged] to see every change.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -304,7 +305,7 @@ end
 
 	Returns an [ObservableValue](https://jdevon.github.io/observable-value/) that follows the replicated value,
 	for code that works with ObservableValues, like the
-	[ReactObservableValue](https://github.com/JDevon/react-observable-value) hooks. Calling it again returns the same
+	[ReactObservableValue](https://github.com/JDevon/react-observable-value) hooks. Calling this again returns the same
 	one. Setting it doesn't change the replicated value. Errors if the value hasn't arrived yet.
 
 	```lua

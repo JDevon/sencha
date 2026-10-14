@@ -216,10 +216,10 @@ end
 	@client
 
 	Yields until every replicator the server has defined has its first value on this client, including ones whose
-	modules the client hasn't required yet. After it returns, `get()` is safe on every replicator.
+	modules the client hasn't required yet. After this returns, `get()` is safe on every replicator.
 
-	Call it once while loading, before starting systems that read replicated values. If it's still waiting after 5
-	seconds it warns and lists what it's waiting on.
+	Call this once while loading, before starting systems that read replicated values. If this is still waiting after
+	5 seconds, a warning lists the replicators that don't have a value yet.
 ]=]
 function Sencha.waitForReplicators()
 	assert(RunService:IsClient(), "Sencha.waitForReplicators can only be called on the client")

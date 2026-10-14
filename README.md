@@ -244,6 +244,137 @@ end, {
 - For saved replicators, `apply(old, diff(new, old))` must equal `new`.
 - Players who join, and replicators defined later, always get a full value first.
 - If a patch fails on the client, it asks the server for the full value again and ignores patches until it arrives.
+  A failed patch means a bug, like an `apply` that gives different results on each side, so it errors in Studio and
+  warns in live games.
+- `onUpdateReceived` only fires for patches. Use `onChanged` to see every change.
+
+## Patterns
+
+Player replicators hold a separate value for each player, so they can send different data to different players. These
+patterns build on that, with no extra features needed.
+
+### Sending to a group of players
+
+To send the same value to a group, like a party, set it for each member. Every member's value can be the same frozen
+table, so this costs no extra memory:
+
+```lua
+-- shared
+partyReplicator = Sencha.temporaryReplicator.player(PartyTypes.PartyState, PartyTypes.NO_PARTY),
+
+-- server
+local function syncParty(party)
+	for _, member in party.members do
+		PartyNetwork.partyReplicator:set(member, party.state)
+	end
+end
+
+local function onJoin(party, player)
+	table.insert(party.members, player)
+	syncParty(party)
+end
+
+local function onLeave(party, player)
+	table.remove(party.members, table.find(party.members, player))
+	PartyNetwork.partyReplicator:set(player, PartyTypes.NO_PARTY)
+	syncParty(party)
+end
+```
+
+Groups can be created and removed at any time. Keep every change to a group going through one function like
+`syncParty`, so no member is missed.
+
+### Interest management
+
+To send each player only part of a large table, like the mobs near them, give each player their own view of the table
+and update it with patches. The game keeps the full table and decides what each player can see:
+
+```lua
+-- shared
+MobTypes.MobState = gt.build(gt.table({ kind = gt.string(), health = gt.number() }))
+MobTypes.MobMap = gt.build(gt.dictionary(gt.string(), MobTypes.MobState:type()))
+-- a mob's new state, or false to remove it
+MobTypes.MobPatch = gt.build(gt.dictionary(gt.string(), gt.union(MobTypes.MobState:type(), gt.literal(false))))
+
+function MobTypes.applyPatch(mobs, patch)
+	local newMobs = table.clone(mobs)
+	for mobId, mobState in patch do
+		newMobs[mobId] = if mobState == false then nil else mobState
+	end
+	return newMobs
+end
+
+visibleMobsReplicator = Sencha.temporaryReplicator.player(MobTypes.MobMap, {}, {
+	patchType = MobTypes.MobPatch,
+	apply = MobTypes.applyPatch,
+}),
+```
+
+```lua
+-- server
+local mobs: { [string]: { state: MobState, model: Model } } = {}
+local visibleByPlayer: { [Player]: { [string]: true } } = {}
+
+-- run for each player to patch their visible mobs replicated data
+local function updateVisibility(player: Player)
+	local visible = visibleByPlayer[player]
+	local patch = {}
+	for mobId, mob in mobs do
+		local inRange = isInRange(player, mob)
+		if inRange and not visible[mobId] then
+			visible[mobId] = true
+			patch[mobId] = mob.state
+		elseif not inRange and visible[mobId] then
+			visible[mobId] = nil
+			patch[mobId] = false
+		end
+	end
+	MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, patch)
+end
+
+-- sends a change only to the players who can see that mob
+local function sendToViewers(mobId: string, value: MobState | false)
+	for player, visible in visibleByPlayer do
+		if visible[mobId] then
+			if value == false then
+				visible[mobId] = nil
+			end
+			MobNetwork.visibleMobsReplicator:applyIncrementalUpdate(player, { [mobId] = value })
+		end
+	end
+end
+```
+
+On the client, compare each value with the one before it. `onChanged` passes both, and fires for patches and whole
+values (a `set`, or a resync) alike. Unchanged mobs are the same table, so `~=` finds the ones that changed:
+
+```lua
+local function syncMobVisuals(mobs, oldMobs)
+	for mobId, mobState in mobs do
+		if oldMobs[mobId] == nil then
+			MobVisuals.spawn(mobId, mobState)
+		elseif oldMobs[mobId] ~= mobState then
+			MobVisuals.update(mobId, mobState)
+		end
+	end
+	for mobId in oldMobs do
+		if mobs[mobId] == nil then
+			MobVisuals.remove(mobId)
+		end
+	end
+end
+
+syncMobVisuals(MobNetwork.visibleMobsReplicator:get(), {}) -- after Sencha.waitForReplicators()
+MobNetwork.visibleMobsReplicator:onChanged(function(_player, mobs, oldMobs)
+	syncMobVisuals(mobs, oldMobs)
+end)
+```
+
+- **Keep positions out of the replicator.** Roblox already sends the movement of models in the workspace, and anything
+  that changes every frame belongs on an unreliable event.
+- **Hide mobs a little further out than you show them** (for example, show at 200 studs and hide at 220), so a mob at
+  the edge isn't added and removed over and over.
+- Each change is sent once to every player who can see it.
 
 ## Rules
 
