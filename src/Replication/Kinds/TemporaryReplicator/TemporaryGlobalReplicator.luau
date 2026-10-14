@@ -251,10 +251,11 @@ function TemporaryGlobalReplicator.onChanged<T, P>(
 	callback: (newValue: T, oldValue: T) -> ()
 )
 	if RunService:IsServer() then
-		return toDisconnect(assert(
-			self.serverChangedSignal,
-			"TemporaryGlobalReplicator serverChangedSignal has not been initialized"
-		):Connect(callback))
+		return toDisconnect(
+			assert(self.serverChangedSignal, "TemporaryGlobalReplicator serverChangedSignal has not been initialized"):Connect(
+				callback
+			)
+		)
 	else
 		return getClientReplicator(self):onChanged(callback)
 	end
@@ -314,7 +315,9 @@ end
 
 	@return ObservableValue<T>
 ]=]
-function TemporaryGlobalReplicator.getObservable<T, P>(self: TemporaryGlobalReplicator<T, P>): ObservableValue.ObservableValue<T>
+function TemporaryGlobalReplicator.getObservable<T, P>(
+	self: TemporaryGlobalReplicator<T, P>
+): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `TemporaryGlobalReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
 end

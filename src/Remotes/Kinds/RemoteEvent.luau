@@ -160,10 +160,7 @@ end
 	@param callback (player: Player, T...) -> ()
 	@return Disconnect
 ]=]
-function RemoteEvent.onServerEvent<T...>(
-	self: Event<T...>,
-	callback: (Player, T...) -> ()
-): toDisconnect.Disconnect
+function RemoteEvent.onServerEvent<T...>(self: Event<T...>, callback: (Player, T...) -> ()): toDisconnect.Disconnect
 	assert(RunService:IsServer(), "RemoteEvent.onServerEvent can only be called from the server")
 
 	local rateLimiter = assert(self.rateLimiter, "RateLimiter should exist on the server.")

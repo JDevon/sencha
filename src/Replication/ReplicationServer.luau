@@ -228,11 +228,7 @@ end
 
 -- start
 if RunService:IsServer() and RunService:IsRunning() then
-	DefineHooks.run(
-		ReplicationShared.fetchRemote,
-		ReplicationShared.FETCH_REMOTE_NAME,
-		ReplicationShared.SENCHA_MODULE
-	)
+	DefineHooks.run(ReplicationShared.fetchRemote, ReplicationShared.FETCH_REMOTE_NAME, ReplicationShared.SENCHA_MODULE)
 	DefineHooks.run(
 		ReplicationShared.streamRemote,
 		ReplicationShared.STREAM_REMOTE_NAME,

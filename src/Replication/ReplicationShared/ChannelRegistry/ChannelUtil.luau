@@ -71,7 +71,7 @@ function ChannelUtil.deepEqual(a: any, b: any): boolean
 			return false
 		end
 	end
-	
+
 	return true
 end
 

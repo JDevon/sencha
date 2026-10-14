@@ -294,10 +294,11 @@ function TemporaryPlayerReplicator.onChanged<T, P>(
 	callback: (player: Player, newValue: T, oldValue: T) -> ()
 )
 	if RunService:IsServer() then
-		return toDisconnect(assert(
-			self.serverChangedSignal,
-			"TemporaryPlayerReplicator serverChangedSignal has not been initialized"
-		):Connect(callback))
+		return toDisconnect(
+			assert(self.serverChangedSignal, "TemporaryPlayerReplicator serverChangedSignal has not been initialized"):Connect(
+				callback
+			)
+		)
 	else
 		return getClientReplicator(self):onChanged(function(newValue, oldValue)
 			callback(Players.LocalPlayer, newValue, oldValue)
@@ -359,7 +360,9 @@ end
 
 	@return ObservableValue<T>
 ]=]
-function TemporaryPlayerReplicator.getObservable<T, P>(self: TemporaryPlayerReplicator<T, P>): ObservableValue.ObservableValue<T>
+function TemporaryPlayerReplicator.getObservable<T, P>(
+	self: TemporaryPlayerReplicator<T, P>
+): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `TemporaryPlayerReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
 end
