@@ -85,7 +85,7 @@ function ClientReplicator.observe<T, P>(self: ClientReplicator<T, P>, callback: 
 	local isLoaded = self.channel.loaded:get()
 	local lastValue: T? = if isLoaded then self.channel.observable:get() else nil
 
-	-- onSet rather than onChanged. 
+	-- onSet rather than onChanged.
 	-- A first value of nil isn't a change from the nil starting value, but still needs a first call
 	local disconnect = self.channel.observable:onSet(function(value)
 		local oldValue = lastValue
