@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 
 local SavedReplicator = require(script.Parent)
 local Signal = require(script.Parent.Parent.Parent.Parent.Parent.Signal)
+local Failures = require(script.Parent.Parent.Parent.Parent.Util.Failures)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
 local ChannelRegistry = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry)
 local ReplicationShared = require(script.Parent.Parent.Parent.Parent.Replication.ReplicationShared)
@@ -10,10 +11,6 @@ local ReplicationServer = require(script.Parent.Parent.Parent.Parent.Replication
 local ChannelUtil = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ChannelUtil)
 
 local toDisconnect = require(script.Parent.Parent.Parent.Parent.Util.toDisconnect)
-local reportFailure = require(script.Parent.Parent.Parent.Parent.Util.reportFailure)
-
--- replicators whose diff and apply have been reported as not matching, so live games warn once per replicator
-local reportedDiffIssues: { [string]: true } = {}
 
 type FetchAsync<D> = (player: Player) -> D?
 
@@ -63,31 +60,23 @@ local sourcesByName: { [string]: true } = {}
 	Sencha doesn't depend on any data store library. A game with two stores creates two sources, and they never
 	interfere.
 
-	In Studio, the source's GreenTea type also checks the data it receives, and warns once if it doesn't match.
+	In Studio, the source's GreenTea type also checks the data it receives, and errors once if it doesn't match.
 ]=]
 local SavedSource = {}
 SavedSource.__index = SavedSource
-
-local function reportDiffIssue(channel: ChannelRegistry.Channel, message: string)
-	if not RunService:IsStudio() then
-		if reportedDiffIssues[channel.key] then
-			return
-		end
-		reportedDiffIssues[channel.key] = true
-		message ..= "\nFurther mismatches for this replicator won't be reported."
-	end
-	reportFailure(message)
-end
 
 local function checkDiff(channel: ChannelRegistry.Channel, newValue: any, oldValue: any, diff: any, isEmpty: boolean)
 	local ok, applied = pcall(function()
 		return if isEmpty then oldValue else (channel.incrementalConfig :: any).apply(oldValue, diff)
 	end)
 	if not ok then
-		reportDiffIssue(channel, `Saved replicator {channel.key}'s apply errored on a patch from its diff:\n{applied}`)
+		Failures.reportOnce(
+			`diff:{channel.key}`,
+			`Saved replicator {channel.key}'s apply errored on a patch from its diff:\n{applied}`
+		)
 	elseif not ChannelUtil.deepEqual(applied, newValue) then
-		reportDiffIssue(
-			channel,
+		Failures.reportOnce(
+			`diff:{channel.key}`,
 			`Saved replicator {channel.key}'s apply doesn't match its diff: apply(oldValue, diff(newValue, oldValue))`
 				.. ` gave a different value than newValue, so clients would end up with a different value than the server.`
 		)
@@ -103,7 +92,9 @@ local function validateSavedData(self: any, data: any, from: string)
 	if not ok then
 		-- reported once, every other later save would fail the same way
 		self.hasReportedInvalidSavedData = true
-		warn(`Saved source {self.name} received data from {from} that does not match its type:\n{cause:formatErr()}`)
+		Failures.report(
+			`Saved source {self.name} received data from {from} that does not match its type:\n{cause:formatErr()}`
+		)
 	end
 end
 

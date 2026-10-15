@@ -37,6 +37,28 @@ local function readValue(self: any, player: Player): any
 	return self.defaultValue
 end
 
+local function setPrepared(self: any, player: Player, preparedValue: any)
+	if player.Parent == nil then
+		return
+	end
+
+	local oldValue = readValue(self, player)
+	if preparedValue == oldValue then
+		return
+	end
+
+	-- clients are sent the change before server listeners run, 
+	-- so anything a listener changes in response reaches clients after it
+	self.values[player] = { value = preparedValue }
+	local payload = ReplicationServer.createPayload(self.channel, preparedValue, "value")
+	ReplicationServer.publish(self.channel, player, payload)
+	assert(self.serverChangedSignal, "TemporaryPlayerReplicator serverChangedSignal has not been initialized"):Fire(
+		player,
+		preparedValue,
+		oldValue
+	)
+end
+
 export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 	{} :: {
 		channel: ReplicatorChannel.ReplicatorChannel<T, P>,
@@ -169,26 +191,7 @@ end
 ]=]
 function TemporaryPlayerReplicator.set<T, P>(self: TemporaryPlayerReplicator<T, P>, player: Player, value: T)
 	assert(RunService:IsServer(), `TemporaryPlayerReplicator:set can only be called on the server`)
-	local preparedValue = self.channel:prepareValue(value)
-	if player.Parent == nil then
-		return
-	end
-
-	local oldValue = readValue(self, player)
-	if preparedValue == oldValue then
-		return
-	end
-
-	-- stored first so listeners calling get(player) see the new value; clients are sent the change before
-	-- server listeners run, so anything a listener changes in response reaches clients after it
-	self.values[player] = { value = preparedValue }
-	local payload = ReplicationServer.createPayload(self.channel, preparedValue, "value")
-	ReplicationServer.publish(self.channel, player, payload)
-	assert(self.serverChangedSignal, "TemporaryPlayerReplicator serverChangedSignal has not been initialized"):Fire(
-		player,
-		preparedValue,
-		oldValue
-	)
+	setPrepared(self, player, self.channel:prepareValue(value))
 end
 
 --[=[
@@ -225,7 +228,7 @@ function TemporaryPlayerReplicator.tryUpdate<T, P>(
 		return false
 	end
 
-	self:set(player, newValue :: T)
+	setPrepared(self, player, self.channel:prepareValue(newValue :: T))
 	return true
 end
 

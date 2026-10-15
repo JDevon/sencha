@@ -29,6 +29,23 @@ local function getClientReplicator<T, P>(self: TemporaryGlobalReplicator<T, P>):
 	return assert(self.clientReplicator, "TemporaryGlobalReplicator clientReplicator has not been initialized")
 end
 
+local function setPrepared(self: any, preparedValue: any)
+	local oldValue = self.value
+	if preparedValue == oldValue then
+		return
+	end
+
+	-- clients are sent the change before server listeners run, 
+	-- so anything a listener changes in response reaches clients after it
+	self.value = preparedValue
+	local payload = ReplicationServer.createPayload(self.channel, preparedValue, "value")
+	ReplicationServer.publishToReadyPlayers(self.channel, payload)
+	assert(self.serverChangedSignal, "TemporaryGlobalReplicator serverChangedSignal has not been initialized"):Fire(
+		preparedValue,
+		oldValue
+	)
+end
+
 export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 	{} :: {
 		channel: ReplicatorChannel.ReplicatorChannel<T, P>,
@@ -140,21 +157,7 @@ end
 ]=]
 function TemporaryGlobalReplicator.set<T, P>(self: TemporaryGlobalReplicator<T, P>, value: T)
 	assert(RunService:IsServer(), `TemporaryGlobalReplicator:set can only be called on the server`)
-	local preparedValue = self.channel:prepareValue(value)
-	local oldValue = self.value
-	if preparedValue == oldValue then
-		return
-	end
-
-	-- stored first so listeners calling get() see the new value; clients are sent the change before server
-	-- listeners run, so anything a listener changes in response reaches clients after it
-	self.value = preparedValue
-	local payload = ReplicationServer.createPayload(self.channel, preparedValue, "value")
-	ReplicationServer.publishToReadyPlayers(self.channel, payload)
-	assert(self.serverChangedSignal, "TemporaryGlobalReplicator serverChangedSignal has not been initialized"):Fire(
-		preparedValue,
-		oldValue
-	)
+	setPrepared(self, self.channel:prepareValue(value))
 end
 
 --[=[
@@ -189,7 +192,7 @@ function TemporaryGlobalReplicator.tryUpdate<T, P>(
 		return false
 	end
 
-	self:set(newValue :: T)
+	setPrepared(self, self.channel:prepareValue(newValue :: T))
 	return true
 end
 

@@ -1,6 +1,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+local Failures = require(script.Parent.Parent.Util.Failures)
 local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
@@ -121,7 +122,10 @@ function ReplicationServer._validateTypes(
 ): boolean
 	local ok, cause = checker:matches(data)
 	if not ok then
-		warn(`Replicator {channel.key} produced a {label} that does not match its type:\n{cause:formatErr()}`)
+		Failures.reportOnce(
+			`{label}:{channel.key}`,
+			`Replicator {channel.key} produced a {label} that does not match its type:\n{cause:formatErr()}`
+		)
 		return false
 	end
 	return true
@@ -136,7 +140,7 @@ function ReplicationServer._validateSerialization(channel: ChannelRegistry.Chann
 	local issue = RemoteSerialization.findIssue(data)
 	if issue then
 		reportedSerializationIssues[reportKey] = true
-		warn(`Replicator {channel.key}'s {label} may not arrive intact on the client: {issue}`)
+		Failures.report(`Replicator {channel.key}'s {label} may not arrive intact on the client: {issue}`)
 	end
 end
 

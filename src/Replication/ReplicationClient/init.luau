@@ -1,11 +1,10 @@
 local RunService = game:GetService("RunService")
 
+local Failures = require(script.Parent.Parent.Util.Failures)
 local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.ObservableValue)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
-
-local reportFailure = require(script.Parent.Parent.Util.reportFailure)
 
 local FETCH_RETRY_SECONDS = 0.5
 local SLOW_LOAD_WARNING_SECONDS = 5
@@ -100,7 +99,7 @@ function ReplicationClient._receiveFromStream(id: number, payload: ReplicationSh
 
 	local resolvedKey = channelKeys[id]
 	if not resolvedKey then
-		reportFailure(`Received a replicator message for unknown id {id}; it was dropped`)
+		Failures.report(`Received a replicator message for unknown id {id}; it was dropped`)
 		return
 	end
 

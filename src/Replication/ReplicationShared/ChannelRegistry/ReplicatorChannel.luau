@@ -4,9 +4,8 @@ local ChannelUtil = require(script.Parent.ChannelUtil)
 local ReplicationShared = require(script.Parent.Parent)
 local gt = require(script.Parent.Parent.Parent.Parent.Parent.GreenTea)
 local Signal = require(script.Parent.Parent.Parent.Parent.Parent.Signal)
+local Failures = require(script.Parent.Parent.Parent.Parent.Util.Failures)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
-
-local reportFailure = require(script.Parent.Parent.Parent.Parent.Util.reportFailure)
 
 export type ReplicatorChannelConfig<T, P> = {
 	kind: string,
@@ -74,7 +73,7 @@ function ReplicatorChannel.receive<T, P>(self: ReplicatorChannel<T, P>, value: a
 	assert(RunService:IsClient(), "Replicators can only receive values on the client.")
 	local ok, cause = self.typechecker:matches(value)
 	if not ok then
-		reportFailure(`Replicator {self.key} received a value that does not match its type:\n{cause:formatErr()}`)
+		Failures.report(`Replicator {self.key} received a value that does not match its type:\n{cause:formatErr()}`)
 		return false
 	end
 
@@ -92,16 +91,16 @@ function ReplicatorChannel.receiveUpdate<T, P>(self: ReplicatorChannel<T, P>, up
 	)
 
 	if not self.loaded:get() then
-		reportFailure(`Replicator {self.key} received a patch before its value; the patch was dropped`)
+		Failures.report(`Replicator {self.key} received a patch before its value; the patch was dropped`)
 		return false
 	end
 
 	local oldValue = self.observable:get()
 	local newValue, patchFailure = self:applyPatch(oldValue, update)
 	if not newValue then
-		-- a bad patch here means the server and client disagree. reportFailure doesn't stop this thread, so the
+		-- a bad patch here means the server and client disagree. Failures.report doesn't stop this thread, so the
 		-- rest of the snapshot and buffered messages still apply
-		reportFailure(`{patchFailure}\nFurther patches are ignored until the server sends a whole value.`)
+		Failures.report(`{patchFailure}\nFurther patches are ignored until the server sends a whole value.`)
 		return false
 	end
 
