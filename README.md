@@ -183,13 +183,13 @@ service, etc.). Create each source in a shared module with a unique name and the
 return Sencha.savedSource("PlayerData", PlayerDataTypes.PlayerData)
 
 -- in a network module
-researchReplicator = PlayerDataSource:replicator(gt.array(gt.string()), function(playerData)
-    return playerData.research
+moneyReplicator = PlayerDataSource:replicator(gt.number({ integer = true, range = "[0, ]" }), function(playerData)
+    return playerData.money
 end),
 ```
 
 The saved data passed to the lookup is fully typed from the source's GreenTea type, so a misspelled field is a type
-error.
+error. GreenTea types can also set limits: here money must be a whole number of 0 or more (`"[0, ]"` leaves the maximum open), and a value outside that is caught on the server instead of being sent.
 
 On the server, connect each source to its store. Sencha doesn't depend on any specific data store library:
 
@@ -216,26 +216,48 @@ By default every change sends the whole value. For large values that change a li
 **patches** instead, by passing an incremental config as its last argument:
 
 ```lua
--- temporary: send patches with applyIncrementalUpdate
-exportLogReplicator = Sencha.temporaryReplicator.player(ExportTypes.ExportLog, {}, {
-    patchType = ExportTypes.ExportLog, -- the entries just exported
-    apply = function(log, newEntries)
-        local newLog = table.clone(log)
-        table.move(newEntries, 1, #newEntries, #newLog + 1, newLog)
-        return newLog
-    end,
+-- shared: a backpack maps item ids to counts, and a patch has the new count of each item that changed (0 removes it)
+InventoryTypes.Items = gt.build(gt.dictionary(gt.string(), gt.number()))
+
+function InventoryUtil.applyItemsPatch(items, patch)
+    local newItems = table.clone(items)
+    for itemId, count in patch do
+        newItems[itemId] = if count > 0 then count else nil
+    end
+    return newItems
+end
+
+function InventoryUtil.diffItems(newItems, oldItems)
+    local patch = {}
+    for itemId, count in newItems do
+        if oldItems[itemId] ~= count then
+            patch[itemId] = count
+        end
+    end
+    for itemId in oldItems do
+        if newItems[itemId] == nil then
+            patch[itemId] = 0
+        end
+    end
+    return patch
+end
+
+-- temporary: a backpack that only lasts one round. The server sends patches with applyIncrementalUpdate
+roundBackpackReplicator = Sencha.temporaryReplicator.player(InventoryTypes.Items, {}, {
+    patchType = InventoryTypes.Items,
+    apply = InventoryUtil.applyItemsPatch,
 }),
 
--- then on the server, only the new entry is sent, not the whole log
-ExportNetwork.exportLogReplicator:applyIncrementalUpdate(player, { exportedEntry })
+-- then on the server, only the changed item is sent, not the whole backpack
+BackpackNetwork.roundBackpackReplicator:applyIncrementalUpdate(player, { sword = 2 })
 
--- saved: the server works out each patch itself with diff
+-- saved: the backpack in the player's save file. The server works out each patch itself with diff
 backpackReplicator = PlayerDataSource:replicator(InventoryTypes.Items, function(playerData)
     return playerData.backpack
 end, {
-    patchType = InventoryTypes.ItemsDiff,
-    diff = InventoryUtil.diffItems, -- (newValue, oldValue) -> patch
-    apply = InventoryUtil.applyItemsDiff, -- (value, patch) -> newValue
+    patchType = InventoryTypes.Items,
+    diff = InventoryUtil.diffItems,
+    apply = InventoryUtil.applyItemsPatch,
 }),
 ```
 
