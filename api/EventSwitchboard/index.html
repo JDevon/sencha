@@ -32,8 +32,8 @@ end)
 -- client
 toolSwitchboard:fireServer(&quot;drop&quot;, 3)
 ```"><link data-rh="true" rel="canonical" href="https://JDevon.github.io/sencha/api/EventSwitchboard"><link data-rh="true" rel="alternate" href="https://JDevon.github.io/sencha/api/EventSwitchboard" hreflang="en"><link data-rh="true" rel="alternate" href="https://JDevon.github.io/sencha/api/EventSwitchboard" hreflang="x-default"><link rel="stylesheet" href="/sencha/assets/css/styles.e8e96400.css">
-<script src="/sencha/assets/js/runtime~main.4ce4cb25.js" defer="defer"></script>
-<script src="/sencha/assets/js/main.e62b34ce.js" defer="defer"></script>
+<script src="/sencha/assets/js/runtime~main.9017e665.js" defer="defer"></script>
+<script src="/sencha/assets/js/main.5af88cde.js" defer="defer"></script>
 </head>
 <body>
 <svg style="display: none;"><defs>
@@ -62,8 +62,8 @@ toolSwitchboard<span class="token punctuation">:</span><span class="token functi
 <p>Sends the arguments to the server callback for <code>port</code>.</p>
 </div><div class="divider_rE5g"></div><h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="rateLimit"><code style="text-decoration:none">rateLimit</code><a href="#rateLimit" class="hash-link" aria-label="Direct link to rateLimit" title="Direct link to rateLimit" translate="no">​</a></h3><span class="badge_Ba2I" style="color:#00CC67"><span class="badgeTooltip_cWXP">This item only works when running on the server.</span><span class="badgeToolTipTail_H9D_"><svg fill="#00CC67" xmlns="http://www.w3.org/2000/svg" version="1.1" x="0px" y="0px" viewBox="0 0 90 90" role="img" aria-label="This item only works when running on the server."><polygon points="6.125,72.421 58.544,88.523 58.544,24.372 6.125,8.269 "></polygon><polygon points="79.818,15.77 79.868,15.755 29.615,1.453 10.328,6.318 60.102,21.609 "></polygon><path d="M61.643,78.738l22.232-6.582V17.801l-22.232,6.584V78.738z M73.811,69.257c-1.174,0-2.125-1.19-2.125-2.659  c0-1.468,0.951-2.658,2.125-2.658c1.172,0,2.123,1.19,2.123,2.658C75.934,68.066,74.982,69.257,73.811,69.257z M64.898,32.121  l16.336-4.41v7.117l-16.336,4.409V32.121z M64.898,41.292l16.336-4.41v7.116l-16.336,4.409V41.292z M64.898,50.463l16.336-4.411  v7.116l-16.336,4.411V50.463z"></path><polygon points="83.875,74.893 61.643,81.477 61.643,88.547 83.875,81.963 "></polygon></svg> <!-- -->Server</span></span><div class="repositoryDetailsContainer_BPdw"><a class="sourceButton_sEho" href="https://github.com/JDevon/sencha/blob/master/src/Remotes/Kinds/RemoteEventSwitchboard.luau#L143"><div class="sourceButtonText_Vh0m">&lt;/&gt;</div></a></div><div class="memberString_GwaU"><code>EventSwitchboard<!-- -->:</code><code class="green_DgR4">rateLimit</code><code>(</code><code>limit<!-- -->: </code><code class="blue_P4bS"><a style="text-decoration:underline;color:inherit" href="/sencha/api/Sencha#Limit">Limit</a></code><code>) → </code><code class="blue_P4bS"><a style="text-decoration:underline;color:inherit" href="/sencha/api/EventSwitchboard">EventSwitchboard</a></code></div><div>
 <p>
-  Sets the rate limit for calls to each port from each player, replacing the default of 60 at once and 30 per second. Returns
-  the same switchboard, so it can be chained where it's created. Errors if the limit is invalid.
+  Sets the rate limit for calls to each port from each player, replacing the default of 60 at once and 30 per second.
+  Returns the same switchboard, so it can be chained where it's created. Errors if the limit is invalid.
 </p>
 <pre class="language-lua"><code class="language-lua">shopSwitchboard <span class="token operator">=</span> Sencha<span class="token punctuation">.</span><span class="token function">eventSwitchboard</span><span class="token punctuation">(</span>gt<span class="token punctuation">.</span><span class="token function">number</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">:</span><span class="token function">rateLimit</span><span class="token punctuation">(</span><span class="token punctuation">{</span> burst <span class="token operator">=</span> <span class="token number">5</span><span class="token punctuation">,</span> perSecond <span class="token operator">=</span> <span class="token number">2</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
 </code></pre>
@@ -128,7 +128,7 @@ toolSwitchboard<span class="token punctuation">:</span><span class="token functi
         },
         {
             &quot;name&quot;: &quot;rateLimit&quot;,
-            &quot;desc&quot;: &quot;Sets the rate limit for calls to each port from each player, replacing the default of 60 at once and 30 per second. Returns\nthe same switchboard, so it can be chained where it&#x27;s created. Errors if the limit is invalid.\n\n```lua\nshopSwitchboard = Sencha.eventSwitchboard(gt.number()):rateLimit({ burst = 5, perSecond = 2 }),\n```&quot;,
+            &quot;desc&quot;: &quot;Sets the rate limit for calls to each port from each player, replacing the default of 60 at once and 30 per second.\nReturns the same switchboard, so it can be chained where it&#x27;s created. Errors if the limit is invalid.\n\n```lua\nshopSwitchboard = Sencha.eventSwitchboard(gt.number()):rateLimit({ burst = 5, perSecond = 2 }),\n```&quot;,
             &quot;params&quot;: [
                 {
                     &quot;name&quot;: &quot;limit&quot;,

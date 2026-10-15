@@ -28,8 +28,8 @@ return Sencha.define(script, {
 	coinsReplicator = Sencha.temporaryReplicator.player(gt.number(), 0),
 })
 ```"><link data-rh="true" rel="canonical" href="https://JDevon.github.io/sencha/api/Sencha"><link data-rh="true" rel="alternate" href="https://JDevon.github.io/sencha/api/Sencha" hreflang="en"><link data-rh="true" rel="alternate" href="https://JDevon.github.io/sencha/api/Sencha" hreflang="x-default"><link rel="stylesheet" href="/sencha/assets/css/styles.e8e96400.css">
-<script src="/sencha/assets/js/runtime~main.4ce4cb25.js" defer="defer"></script>
-<script src="/sencha/assets/js/main.e62b34ce.js" defer="defer"></script>
+<script src="/sencha/assets/js/runtime~main.9017e665.js" defer="defer"></script>
+<script src="/sencha/assets/js/main.5af88cde.js" defer="defer"></script>
 </head>
 <body>
 <svg style="display: none;"><defs>
@@ -147,11 +147,11 @@ meteorShowerReplicator <span class="token operator">=</span> Sencha<span class="
 </div><div class="divider_rE5g"></div><h3 class="anchor anchorTargetStickyNavbar_Vzrq" id="waitForReplicators"><code style="text-decoration:none">waitForReplicators</code><a href="#waitForReplicators" class="hash-link" aria-label="Direct link to waitForReplicators" title="Direct link to waitForReplicators" translate="no">​</a></h3><span class="badge_Ba2I" style="color:#349AD5"><span class="badgeTooltip_cWXP">This item only works when running on the client.</span><span class="badgeToolTipTail_H9D_"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 337 304" fill="#349AD5" role="img" aria-label="This item only works when running on the client."><path d="M0 201h337v36H0v-36zm0 0zM0 0v188h337V0H0zM218 287h30c12 0 12 17 0 17H88c-11 0-11-17 0-17h31l10-39h79l10 39z"></path></svg> <!-- -->Client</span></span><span class="badge_Ba2I" style="color:#f1c40f"><span class="badgeTooltip_cWXP">This is a yielding function. When called, it will pause the Lua thread that called the function until a result is ready to be returned, without interrupting other scripts.</span><span class="badgeToolTipTail_H9D_"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#f1c40f" role="img" aria-label="This is a yielding function. When called, it will pause the Lua thread that called the function until a result is ready to be returned, without interrupting other scripts."><path d="M96.4 11.9c-1.4-2.5-4-4-6.9-4H10.8c-2.9 0-5.4 1.5-6.9 4-1.4 2.5-1.4 5.5 0 7.9L43.3 88c1.4 2.5 4 4 6.9 4 2.9 0 5.4-1.5 6.9-4l39.3-68.2c1.4-2.4 1.4-5.4 0-7.9zM46.3 54.5c1.1-1.1 2.3-1.6 3.8-1.6s2.8.5 3.8 1.6c1.1 1.1 1.6 2.3 1.6 3.8s-.5 2.8-1.6 3.8c-1.1 1.1-2.3 1.6-3.8 1.6s-2.8-.5-3.8-1.6c-1.1-1.1-1.6-2.3-1.6-3.8.1-1.5.6-2.8 1.6-3.8zm-.5-4.9V21.8h8.8v27.8h-8.8z"></path></svg> <!-- -->Yields</span></span><div class="repositoryDetailsContainer_BPdw"><a class="sourceButton_sEho" href="https://github.com/JDevon/sencha/blob/master/src/init.luau#L224"><div class="sourceButtonText_Vh0m">&lt;/&gt;</div></a></div><div class="memberString_GwaU"><code>Sencha<!-- -->.</code><code class="green_DgR4">waitForReplicators</code><code>(</code><code>) → </code><code>(</code><code>)</code></div><div>
 <p>
   Yields until every replicator the server has defined has its first value on this client, including ones whose
-  modules the client hasn't required yet. After it returns, <code>get()</code> is safe on every replicator.
+  modules the client hasn't required yet. After this returns, <code>get()</code> is safe on every replicator.
 </p>
 <p>
-  Call it once while loading, before starting systems that read replicated values. If it's still waiting after 5
-  seconds it warns and lists what it's waiting on.
+  Call this once while loading, before starting systems that read replicated values. If this is still waiting after
+  5 seconds, a warning lists the replicators that don't have a value yet.
 </p>
 </div></div></article></div><details><summary>Show raw api</summary><pre style="max-width:100%;white-space:pre-wrap">{
     &quot;functions&quot;: [
@@ -331,7 +331,7 @@ meteorShowerReplicator <span class="token operator">=</span> Sencha<span class="
         },
         {
             &quot;name&quot;: &quot;waitForReplicators&quot;,
-            &quot;desc&quot;: &quot;Yields until every replicator the server has defined has its first value on this client, including ones whose\nmodules the client hasn&#x27;t required yet. After it returns, `get()` is safe on every replicator.\n\nCall it once while loading, before starting systems that read replicated values. If it&#x27;s still waiting after 5\nseconds it warns and lists what it&#x27;s waiting on.&quot;,
+            &quot;desc&quot;: &quot;Yields until every replicator the server has defined has its first value on this client, including ones whose\nmodules the client hasn&#x27;t required yet. After this returns, `get()` is safe on every replicator.\n\nCall this once while loading, before starting systems that read replicated values. If this is still waiting after\n5 seconds, a warning lists the replicators that don&#x27;t have a value yet.&quot;,
             &quot;params&quot;: [],
             &quot;returns&quot;: [],
             &quot;function_type&quot;: &quot;static&quot;,
