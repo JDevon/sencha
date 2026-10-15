@@ -13,7 +13,7 @@ export type ClientReplicator<T, P> = typeof(setmetatable(
 		__index: {
 			get: (ClientReplicator<T, P>) -> T,
 			getAsync: (ClientReplicator<T, P>) -> T,
-			observe: (ClientReplicator<T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
+			observe: (ClientReplicator<T, P>, callback: (newValue: T, oldValue: T?) -> ()) -> toDisconnect.Disconnect,
 			onChanged: (ClientReplicator<T, P>, callback: (newValue: T, oldValue: T) -> ()) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
 				ClientReplicator<T, P>,
@@ -80,13 +80,22 @@ function ClientReplicator.getAsync<T, P>(self: ClientReplicator<T, P>): T
 	return self.channel.observable:get()
 end
 
--- fires immediately if loaded (otherwise once loaded), then on every change
-function ClientReplicator.observe<T, P>(self: ClientReplicator<T, P>, callback: (value: T) -> ())
-	local connection = self.channel.observable:onSet(callback)
-	if self.channel.loaded:get() then
-		task.spawn(callback, self.channel.observable:get())
+-- fires immediately if loaded (otherwise once loaded), then on every change. oldValue is nil for the first call
+function ClientReplicator.observe<T, P>(self: ClientReplicator<T, P>, callback: (newValue: T, oldValue: T?) -> ())
+	local isLoaded = self.channel.loaded:get()
+	local lastValue: T? = if isLoaded then self.channel.observable:get() else nil
+
+	-- onSet rather than onChanged. 
+	-- A first value of nil isn't a change from the nil starting value, but still needs a first call
+	local disconnect = self.channel.observable:onSet(function(value)
+		local oldValue = lastValue
+		lastValue = value
+		callback(value, oldValue)
+	end)
+	if isLoaded then
+		task.spawn(callback, lastValue :: T, nil)
 	end
-	return connection
+	return disconnect
 end
 
 -- fires on changes after the initial value

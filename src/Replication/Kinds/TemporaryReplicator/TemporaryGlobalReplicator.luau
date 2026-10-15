@@ -35,7 +35,7 @@ local function setPrepared(self: any, preparedValue: any)
 		return
 	end
 
-	-- clients are sent the change before server listeners run, 
+	-- clients are sent the change before server listeners run,
 	-- so anything a listener changes in response reaches clients after it
 	self.value = preparedValue
 	local payload = ReplicationServer.createPayload(self.channel, preparedValue, "value")
@@ -60,7 +60,10 @@ export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 			set: (self: TemporaryGlobalReplicator<T, P>, value: T) -> (),
 			tryUpdate: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> (boolean, T?)) -> boolean,
 			applyIncrementalUpdate: (self: TemporaryGlobalReplicator<T, P>, update: P) -> (),
-			observe: (self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
+			observe: (
+				self: TemporaryGlobalReplicator<T, P>,
+				callback: (newValue: T, oldValue: T?) -> ()
+			) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
 				self: TemporaryGlobalReplicator<T, P>,
 				callback: (newValue: T, oldValue: T, patch: P) -> ()
@@ -270,12 +273,23 @@ end
 	@client
 
 	Calls `callback` with the current value right away if it has arrived (otherwise when it arrives), then on
-	every change.
+	every change. `oldValue` is the value before the change, or `nil` for the first call.
 
-	@param callback (value: T) -> ()
+	```lua
+	EventsNetwork.meteorShowerReplicator:observe(function(isActive, wasActive)
+		if isActive and wasActive ~= true then
+			print("a meteor shower started")
+		end
+	end)
+	```
+
+	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
-function TemporaryGlobalReplicator.observe<T, P>(self: TemporaryGlobalReplicator<T, P>, callback: (value: T) -> ())
+function TemporaryGlobalReplicator.observe<T, P>(
+	self: TemporaryGlobalReplicator<T, P>,
+	callback: (newValue: T, oldValue: T?) -> ()
+)
 	assert(RunService:IsClient(), `TemporaryGlobalReplicator:observe can only be called on the client`)
 	return getClientReplicator(self):observe(callback)
 end

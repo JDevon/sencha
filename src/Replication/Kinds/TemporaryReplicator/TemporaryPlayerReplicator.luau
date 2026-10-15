@@ -47,7 +47,7 @@ local function setPrepared(self: any, player: Player, preparedValue: any)
 		return
 	end
 
-	-- clients are sent the change before server listeners run, 
+	-- clients are sent the change before server listeners run,
 	-- so anything a listener changes in response reaches clients after it
 	self.values[player] = { value = preparedValue }
 	local payload = ReplicationServer.createPayload(self.channel, preparedValue, "value")
@@ -79,7 +79,10 @@ export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 				callback: (value: T) -> (boolean, T?)
 			) -> boolean,
 			applyIncrementalUpdate: (self: TemporaryPlayerReplicator<T, P>, player: Player, update: P) -> (),
-			observe: (self: TemporaryPlayerReplicator<T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
+			observe: (
+				self: TemporaryPlayerReplicator<T, P>,
+				callback: (newValue: T, oldValue: T?) -> ()
+			) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
 				self: TemporaryPlayerReplicator<T, P>,
 				callback: (newValue: T, oldValue: T, patch: P) -> ()
@@ -315,12 +318,21 @@ end
 	@client
 
 	Calls `callback` with the current value right away if it has arrived (otherwise when it arrives), then on
-	every change.
+	every change. `oldValue` is the value before the change, or `nil` for the first call.
 
-	@param callback (value: T) -> ()
+	```lua
+	CurrencyNetwork.coinsReplicator:observe(function(coins, oldCoins)
+		print(`coins: {oldCoins} -> {coins}`) -- oldCoins is nil the first time
+	end)
+	```
+
+	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
-function TemporaryPlayerReplicator.observe<T, P>(self: TemporaryPlayerReplicator<T, P>, callback: (value: T) -> ())
+function TemporaryPlayerReplicator.observe<T, P>(
+	self: TemporaryPlayerReplicator<T, P>,
+	callback: (newValue: T, oldValue: T?) -> ()
+)
 	assert(RunService:IsClient(), `TemporaryPlayerReplicator:observe can only be called on the client`)
 	return getClientReplicator(self):observe(callback)
 end

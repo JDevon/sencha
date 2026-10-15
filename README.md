@@ -141,7 +141,7 @@ replicator, so the server always chooses what becomes public.
 | `onChanged` | both | fires on changes, not for the first value |
 | `set` / `applyIncrementalUpdate` | server, temporary only | changes the value and sends it to clients |
 | `tryUpdate` | server, temporary only | calls a function with the current value, and sets what it returns if it returns `true` |
-| `observe` | client | fires right away if the value has arrived (otherwise when it arrives), then on every change |
+| `observe` | client | fires right away if the value has arrived (otherwise when it arrives), then on every change; passes the new and old value |
 | `getObservable` | client | returns an [ObservableValue](https://github.com/JDevon/observable-value) that follows the value |
 | `isLoaded` | client | whether the value has arrived |
 | `onUpdateReceived` | client | fires for each patch received (see [Incremental updates](#incremental-updates)) |

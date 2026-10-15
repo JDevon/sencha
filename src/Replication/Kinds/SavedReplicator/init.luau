@@ -54,7 +54,10 @@ export type SavedReplicator<D, T, P> = typeof(setmetatable(
 				self: SavedReplicator<D, T, P>,
 				callback: (player: Player, newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
-			observe: (self: SavedReplicator<D, T, P>, callback: (value: T) -> ()) -> toDisconnect.Disconnect,
+			observe: (
+				self: SavedReplicator<D, T, P>,
+				callback: (newValue: T, oldValue: T?) -> ()
+			) -> toDisconnect.Disconnect,
 			onUpdateReceived: (
 				self: SavedReplicator<D, T, P>,
 				callback: (newValue: T, oldValue: T, patch: P) -> ()
@@ -171,12 +174,18 @@ end
 	@client
 
 	Calls `callback` with the current value right away if it has arrived (otherwise when it arrives), then on
-	every change.
+	every change. `oldValue` is the value before the change, or `nil` for the first call.
 
-	@param callback (value: T) -> ()
+	```lua
+	ResearchNetwork.researchReplicator:observe(function(research, oldResearch)
+		print(`researched {#research} items, up from {if oldResearch then #oldResearch else 0}`)
+	end)
+	```
+
+	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
-function SavedReplicator.observe<D, T, P>(self: SavedReplicator<D, T, P>, callback: (value: T) -> ())
+function SavedReplicator.observe<D, T, P>(self: SavedReplicator<D, T, P>, callback: (newValue: T, oldValue: T?) -> ())
 	assert(RunService:IsClient(), `SavedReplicator:observe can only be called on the client`)
 	return getClientReplicator(self):observe(callback)
 end
