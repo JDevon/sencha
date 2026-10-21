@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 local RemoteFunction = require(script.Parent.RemoteFunction)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
-local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 --[=[
 	@class FunctionSwitchboard
@@ -60,7 +60,7 @@ function RemoteFnSwitchboard.new<T..., R...>(args: (T...) -> (), ret: () -> R...
 		local rejections = assert(self.remote.rejections, "RemoteRejections should exist on the server.")
 
 		remoteInstance.OnServerInvoke = function(player, predictionId, port, ...)
-			local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+			local ok, cause = PredictionsShared.validatePredictionId(predictionId)
 			if not ok then
 				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
 				error(`{rejections:getName()} received an invalid prediction id`, 0)

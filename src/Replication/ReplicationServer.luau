@@ -6,6 +6,7 @@ local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
 local RemoteSerialization = require(script.Parent.Parent.Remotes.RemoteSerialization)
+local PredictionsServer = require(script.Parent.Parent.Predictions.PredictionsServer)
 
 type SnapshotPreparerAsync = (player: Player) -> (boolean, any)
 
@@ -238,6 +239,9 @@ if RunService:IsServer() and RunService:IsRunning() then
 		ReplicationShared.STREAM_REMOTE_NAME,
 		ReplicationShared.SENCHA_MODULE
 	)
+	PredictionsServer.setStreamSender(function(player, id, payload)
+		ReplicationShared.streamRemote:fireClient(player, id, payload)
+	end)
 
 	ReplicationShared.fetchRemote:onServerInvoke(ReplicationServer._tryFetchAsync)
 

@@ -7,7 +7,7 @@ local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
-local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 local runListeners = require(script.Parent.Parent.Parent.Util.runListeners)
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
@@ -171,7 +171,7 @@ function RemoteEvent.onServerEvent<T...>(self: Event<T...>, callback: (Player, T
 	if not self.serverConnection then
 		-- one connection per remote, so each call from a client spends one token and is type-checked once
 		local connection = self.loader:assertInstance().OnServerEvent:Connect(function(player, predictionId, ...)
-			local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+			local ok, cause = PredictionsShared.validatePredictionId(predictionId)
 			if not ok then
 				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
 				return

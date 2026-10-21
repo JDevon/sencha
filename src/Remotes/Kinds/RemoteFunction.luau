@@ -6,7 +6,7 @@ local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
-local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 --[=[
 	@class Function
@@ -105,7 +105,7 @@ function RemoteFunction.onServerInvoke<T..., R...>(self: Function<T..., R...>, c
 	local rateLimiter = assert(self.rateLimiter, "RateLimiter should exist on the server.")
 	local rejections = assert(self.rejections, "RemoteRejections should exist on the server.")
 	self.loader:assertInstance().OnServerInvoke = function(player, predictionId, ...)
-		local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+		local ok, cause = PredictionsShared.validatePredictionId(predictionId)
 		if not ok then
 			rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
 			error(`{rejections:getName()} received an invalid prediction id`, 0)

@@ -4,7 +4,7 @@ local RemoteEvent = require(script.Parent.RemoteEvent)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
-local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 --[=[
 	@class EventSwitchboard
@@ -56,7 +56,7 @@ function RemoteEventSwitchboard.new<T...>(...: T...): RemoteEventSwitchboard<T..
 		local rejections = assert(self.remote.rejections, "RemoteRejections should exist on the server.")
 
 		self.cleanup:add(remoteInstance.OnServerEvent:Connect(function(player, predictionId, port, ...)
-			local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+			local ok, cause = PredictionsShared.validatePredictionId(predictionId)
 			if not ok then
 				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
 				return
