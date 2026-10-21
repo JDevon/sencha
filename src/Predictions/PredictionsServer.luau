@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 
 local Failures = require(script.Parent.Parent.Util.Failures)
 
-type HeldMessage = { id: number, payload: any, key: string? }
+export type HeldMessage = { id: number, payload: any, key: string? }
 type ActivePrediction = { id: number, held: { HeldMessage }, isHolding: boolean, escapeThread: thread }
 
 local MAX_PREDICTION_WAIT = 2

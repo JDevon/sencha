@@ -107,12 +107,14 @@ end
 function ReplicationServer._send(channel: ChannelRegistry.Channel, player: Player, payload: ReplicationShared.Payload)
 	local id = channelIds[channel.key]
 	local known = knownChannelIds[player]
-	if known[id] then
-		ReplicationShared.streamRemote:fireClient(player, id, payload)
-	else
-		known[id] = true
-		ReplicationShared.streamRemote:fireClient(player, id, payload, channel.key)
+	local key = if known[id] then nil else channel.key
+	known[id] = true
+
+	if PredictionsServer.holdMessage(player, { id = id, payload = payload, key = key }) then
+		return
 	end
+
+	ReplicationShared.streamRemote:fireClient(player, id, payload, key)
 end
 
 function ReplicationServer._validateTypes(
