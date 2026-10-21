@@ -4,12 +4,12 @@ local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local gt = require(script.Parent.Parent.Parent.Parent.GreenTea)
 local RemoteLoader = require(script.Parent.Parent.RemoteLoader)
 local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
-local Signal = require(script.Parent.Parent.Parent.Parent.Signal)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
 local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 
+local runListeners = require(script.Parent.Parent.Parent.Util.runListeners)
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
 
 --[=[
@@ -32,7 +32,7 @@ export type Event<T...> = typeof(setmetatable(
 		typechecker: RemoteTypechecker.RemoteTypechecker<T...>,
 		rateLimiter: RateLimiter.RateLimiter?,
 		rejections: RemoteRejections.RemoteRejections?,
-		serverListeners: Signal.Signal<(Player, ...any)>,
+		listeners: { runListeners.Listener },
 		serverConnection: RBXScriptConnection?,
 	},
 	{} :: {
@@ -75,9 +75,11 @@ function RemoteEvent.new<T...>(isUnreliable: boolean, ...: T...): Event<T...>
 	self.loader = RemoteLoader.new(remoteEventInstance)
 	self.typechecker = RemoteTypechecker.fromArgs(gt.args(...))
 
-	self.serverListeners = Signal.new()
+	self.listeners = {}
+	self.cleanup:add(function()
+		table.clear(self.listeners)
+	end)
 	self.serverConnection = nil :: RBXScriptConnection?
-	self.cleanup:add(self.serverListeners)
 
 	DefineHooks.set(self, function(name, parent)
 		self.loader:load(name, parent)
@@ -190,13 +192,25 @@ function RemoteEvent.onServerEvent<T...>(self: Event<T...>, callback: (Player, T
 				return
 			end
 
-			self.serverListeners:Fire(player, ...)
+			runListeners(player, self.listeners, table.pack(...))
 		end)
 		self.serverConnection = connection
 		self.cleanup:add(connection)
 	end
 
-	return toDisconnect(self.serverListeners:Connect(callback))
+	local listener = { callback = callback, connected = true }
+	table.insert(self.listeners, listener)
+	return function()
+		if not listener.connected then
+			return
+		end
+
+		listener.connected = false
+		local index = table.find(self.listeners, listener)
+		if index then
+			table.remove(self.listeners, index)
+		end
+	end
 end
 
 --[=[
