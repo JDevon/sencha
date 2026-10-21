@@ -4,6 +4,7 @@ local RemoteEvent = require(script.Parent.RemoteEvent)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 --[=[
@@ -65,21 +66,33 @@ function RemoteEventSwitchboard.new<T...>(...: T...): RemoteEventSwitchboard<T..
 			local callback = if type(port) == "string" then self.connectionMap[port] else nil
 			if not callback then
 				rejections:reject(player, "unknown port")
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
 			if not rateLimiter:tryConsume(player, port) then
 				rejections:reject(player, "rate limited", port)
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
 			ok, cause = self.remote.typechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", port, cause:formatErr())
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
-			callback(player, ...)
+			if predictionId then
+				PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+				local callbackOk, trace = xpcall(callback :: (Player, ...any) -> ...any, debug.traceback, player, ...)
+				PredictionsServer.finishPrediction(player, predictionId)
+				if not callbackOk then
+					error(trace, 0)
+				end
+			else
+				callback(player, ...)
+			end
 		end))
 	end
 

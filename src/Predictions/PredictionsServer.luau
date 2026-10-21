@@ -78,8 +78,10 @@ function PredictionsServer.holdMessage(player: Player, message: HeldMessage)
 	return true
 end
 
-function PredictionsServer.acknowledgeRejected(player: Player, id: number)
-	PredictionsServer._sendBatch(player, {}, id)
+function PredictionsServer.tryAcknowledgeRejected(player: Player, id: (number | false)?)
+	if id then
+		PredictionsServer._sendBatch(player, {}, id)
+	end
 end
 
 -- private

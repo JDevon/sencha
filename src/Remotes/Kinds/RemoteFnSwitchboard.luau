@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 local RemoteFunction = require(script.Parent.RemoteFunction)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 --[=[
@@ -69,21 +70,34 @@ function RemoteFnSwitchboard.new<T..., R...>(args: (T...) -> (), ret: () -> R...
 			local callback = if type(port) == "string" then self.connectionMap[port] else nil
 			if not callback then
 				rejections:reject(player, "unknown port")
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				error(`{rejections:getName()} has no such port`, 0)
 			end
 
 			if not rateLimiter:tryConsume(player, port) then
 				rejections:reject(player, "rate limited", port)
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				error(`{rejections:getName()} is rate limited; try again shortly`, 0)
 			end
 
 			ok, cause = self.remote.argTypechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", port, cause:formatErr())
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				error(`{rejections:getName()} received invalid arguments`, 0)
 			end
 
-			return self.remote.retTypechecker:check(callback(player, ...))
+			if predictionId then
+				PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+				local results = table.pack(pcall(callback, player, ...))
+				PredictionsServer.finishPrediction(player, predictionId)
+				if not results[1] then
+					error(results[2], 0)
+				end
+				return self.remote.retTypechecker:check(table.unpack(results, 2, results.n))
+			else
+				return self.remote.retTypechecker:check(callback(player, ...))
+			end
 		end
 	end
 

@@ -8,6 +8,7 @@ local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 
 local runListeners = require(script.Parent.Parent.Parent.Util.runListeners)
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
@@ -177,22 +178,27 @@ function RemoteEvent.onServerEvent<T...>(self: Event<T...>, callback: (Player, T
 				return
 			end
 
-			-- TODO: Add prediction handling here
-			-- if predictionId ~= false then
-			-- end
-
 			if not rateLimiter:tryConsume(player) then
 				rejections:reject(player, "rate limited")
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
 			ok, cause = self.typechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", nil, cause:formatErr())
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
-			runListeners(player, self.listeners, table.pack(...))
+			if predictionId then
+				PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+				runListeners(player, self.listeners, table.pack(...), function()
+					PredictionsServer.finishPrediction(player, predictionId)
+				end)
+			else
+				runListeners(player, self.listeners, table.pack(...))
+			end
 		end)
 		self.serverConnection = connection
 		self.cleanup:add(connection)

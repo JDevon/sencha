@@ -6,6 +6,7 @@ local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
 
 --[=[
@@ -111,22 +112,30 @@ function RemoteFunction.onServerInvoke<T..., R...>(self: Function<T..., R...>, c
 			error(`{rejections:getName()} received an invalid prediction id`, 0)
 		end
 
-		-- TODO: Add prediction handling here
-		-- if predictionId ~= false then
-		-- end
-
 		if not rateLimiter:tryConsume(player) then
 			rejections:reject(player, "rate limited")
+			PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 			error(`{rejections:getName()} is rate limited; try again shortly`, 0)
 		end
 
 		ok, cause = self.argTypechecker:matches(...)
 		if not ok then
 			rejections:reject(player, "invalid arguments", nil, cause:formatErr())
+			PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 			error(`{rejections:getName()} received invalid arguments`, 0)
 		end
 
-		return self.retTypechecker:check(callback(player, ...))
+		if predictionId then
+			PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+			local results = table.pack(pcall(callback, player, ...))
+			PredictionsServer.finishPrediction(player, predictionId)
+			if not results[1] then
+				error(results[2], 0)
+			end
+			return self.retTypechecker:check(table.unpack(results, 2, results.n))
+		else
+			return self.retTypechecker:check(callback(player, ...))
+		end
 	end
 end
 
