@@ -8,6 +8,7 @@ local Signal = require(script.Parent.Parent.Parent.Parent.Signal)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
 
@@ -100,7 +101,7 @@ end
 ]=]
 function RemoteEvent.fireServer<T...>(self: Event<T...>, ...: T...)
 	assert(RunService:IsClient(), "RemoteEvent.fireServer can only be called from the client")
-	self.loader:assertInstance():FireServer(self.typechecker:check(...))
+	self.loader:assertInstance():FireServer(false, self.typechecker:check(...))
 end
 
 --[=[
@@ -167,13 +168,23 @@ function RemoteEvent.onServerEvent<T...>(self: Event<T...>, callback: (Player, T
 	local rejections = assert(self.rejections, "RemoteRejections should exist on the server.")
 	if not self.serverConnection then
 		-- one connection per remote, so each call from a client spends one token and is type-checked once
-		local connection = self.loader:assertInstance().OnServerEvent:Connect(function(player, ...)
+		local connection = self.loader:assertInstance().OnServerEvent:Connect(function(player, predictionId, ...)
+			local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+			if not ok then
+				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+				return
+			end
+
+			-- TODO: Add prediction handling here
+			-- if predictionId ~= false then
+			-- end
+
 			if not rateLimiter:tryConsume(player) then
 				rejections:reject(player, "rate limited")
 				return
 			end
 
-			local ok, cause = self.typechecker:matches(...)
+			ok, cause = self.typechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", nil, cause:formatErr())
 				return

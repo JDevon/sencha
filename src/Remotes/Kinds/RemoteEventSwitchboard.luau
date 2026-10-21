@@ -4,6 +4,7 @@ local RemoteEvent = require(script.Parent.RemoteEvent)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 
 --[=[
 	@class EventSwitchboard
@@ -54,7 +55,13 @@ function RemoteEventSwitchboard.new<T...>(...: T...): RemoteEventSwitchboard<T..
 		local rateLimiter = assert(self.remote.rateLimiter, "RateLimiter should exist on the server.")
 		local rejections = assert(self.remote.rejections, "RemoteRejections should exist on the server.")
 
-		self.cleanup:add(remoteInstance.OnServerEvent:Connect(function(player, port, ...)
+		self.cleanup:add(remoteInstance.OnServerEvent:Connect(function(player, predictionId, port, ...)
+			local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+			if not ok then
+				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+				return
+			end
+
 			local callback = if type(port) == "string" then self.connectionMap[port] else nil
 			if not callback then
 				rejections:reject(player, "unknown port")
@@ -66,7 +73,7 @@ function RemoteEventSwitchboard.new<T...>(...: T...): RemoteEventSwitchboard<T..
 				return
 			end
 
-			local ok, cause = self.remote.typechecker:matches(...)
+			ok, cause = self.remote.typechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", port, cause:formatErr())
 				return
@@ -122,7 +129,7 @@ end
 ]=]
 function RemoteEventSwitchboard.fireServer<T...>(self: RemoteEventSwitchboard<T...>, port: string, ...: T...)
 	assert(RunService:IsClient(), "RemoteEventSwitchboard.fireServer can only be called from the client")
-	return self.remote.loader:assertInstance():FireServer(port, self.remote.typechecker:check(...))
+	return self.remote.loader:assertInstance():FireServer(false, port, self.remote.typechecker:check(...))
 end
 
 --[=[

@@ -6,6 +6,7 @@ local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 
 --[=[
 	@class Function
@@ -87,7 +88,7 @@ end
 ]=]
 function RemoteFunction.invokeServer<T..., R...>(self: Function<T..., R...>, ...: T...): R...
 	assert(RunService:IsClient(), "RemoteFunction.invokeServer can only be called from the client")
-	return self.retTypechecker:check(self.loader:assertInstance():InvokeServer(self.argTypechecker:check(...)))
+	return self.retTypechecker:check(self.loader:assertInstance():InvokeServer(false, self.argTypechecker:check(...)))
 end
 
 --[=[
@@ -103,13 +104,23 @@ function RemoteFunction.onServerInvoke<T..., R...>(self: Function<T..., R...>, c
 	assert(RunService:IsServer(), "RemoteFunction.onServerInvoke can only be called from the server")
 	local rateLimiter = assert(self.rateLimiter, "RateLimiter should exist on the server.")
 	local rejections = assert(self.rejections, "RemoteRejections should exist on the server.")
-	self.loader:assertInstance().OnServerInvoke = function(player, ...)
+	self.loader:assertInstance().OnServerInvoke = function(player, predictionId, ...)
+		local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+		if not ok then
+			rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+			error(`{rejections:getName()} received an invalid prediction id`, 0)
+		end
+
+		-- TODO: Add prediction handling here
+		-- if predictionId ~= false then
+		-- end
+
 		if not rateLimiter:tryConsume(player) then
 			rejections:reject(player, "rate limited")
 			error(`{rejections:getName()} is rate limited; try again shortly`, 0)
 		end
 
-		local ok, cause = self.argTypechecker:matches(...)
+		ok, cause = self.argTypechecker:matches(...)
 		if not ok then
 			rejections:reject(player, "invalid arguments", nil, cause:formatErr())
 			error(`{rejections:getName()} received invalid arguments`, 0)

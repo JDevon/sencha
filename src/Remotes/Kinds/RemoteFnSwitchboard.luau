@@ -3,6 +3,7 @@ local RunService = game:GetService("RunService")
 local RemoteFunction = require(script.Parent.RemoteFunction)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 
 --[=[
 	@class FunctionSwitchboard
@@ -58,7 +59,13 @@ function RemoteFnSwitchboard.new<T..., R...>(args: (T...) -> (), ret: () -> R...
 		local rateLimiter = assert(self.remote.rateLimiter, "RateLimiter should exist on the server.")
 		local rejections = assert(self.remote.rejections, "RemoteRejections should exist on the server.")
 
-		remoteInstance.OnServerInvoke = function(player, port, ...)
+		remoteInstance.OnServerInvoke = function(player, predictionId, port, ...)
+			local ok, cause = PredictionsServer.validatePredictionId(predictionId)
+			if not ok then
+				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+				error(`{rejections:getName()} received an invalid prediction id`, 0)
+			end
+
 			local callback = if type(port) == "string" then self.connectionMap[port] else nil
 			if not callback then
 				rejections:reject(player, "unknown port")
@@ -70,7 +77,7 @@ function RemoteFnSwitchboard.new<T..., R...>(args: (T...) -> (), ret: () -> R...
 				error(`{rejections:getName()} is rate limited; try again shortly`, 0)
 			end
 
-			local ok, cause = self.remote.argTypechecker:matches(...)
+			ok, cause = self.remote.argTypechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", port, cause:formatErr())
 				error(`{rejections:getName()} received invalid arguments`, 0)
@@ -129,7 +136,7 @@ end
 function RemoteFnSwitchboard.invokeServer<T..., R...>(self: RemoteFnSwitchboard<T..., R...>, port: string, ...: T...): R...
 	assert(RunService:IsClient(), "RemoteFnSwitchboard.invokeServer can only be called from the client")
 	return self.remote.retTypechecker:check(
-		self.remote.loader:assertInstance():InvokeServer(port, self.remote.argTypechecker:check(...))
+		self.remote.loader:assertInstance():InvokeServer(false, port, self.remote.argTypechecker:check(...))
 	)
 end
 

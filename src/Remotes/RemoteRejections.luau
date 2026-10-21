@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService")
 
 local Cleanup = require(script.Parent.Parent.Util.Cleanup)
 
-export type Reason = "rate limited" | "invalid arguments" | "unknown port"
+export type Reason = "rate limited" | "invalid arguments" | "unknown port" | "invalid prediction id"
 
 local REJECTION_WARN_INTERVAL_SECONDS = 60
 local MAX_DETAIL_LENGTH = 300
