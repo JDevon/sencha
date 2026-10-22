@@ -3,6 +3,9 @@ local RunService = game:GetService("RunService")
 local RemoteFunction = require(script.Parent.RemoteFunction)
 local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 
 --[=[
 	@class FunctionSwitchboard
@@ -39,6 +42,12 @@ export type RemoteFnSwitchboard<T..., R...> = typeof(setmetatable(
 				callback: (Player, T...) -> R...
 			) -> () -> (),
 			invokeServer: (self: RemoteFnSwitchboard<T..., R...>, port: string, T...) -> R...,
+			invokeServerPredicted: (
+				self: RemoteFnSwitchboard<T..., R...>,
+				predictions: { PredictionsClient.PredictionRequest },
+				port: string,
+				T...
+			) -> R...,
 			rateLimit: (
 				self: RemoteFnSwitchboard<T..., R...>,
 				limit: RateLimiter.Limit
@@ -58,25 +67,44 @@ function RemoteFnSwitchboard.new<T..., R...>(args: (T...) -> (), ret: () -> R...
 		local rateLimiter = assert(self.remote.rateLimiter, "RateLimiter should exist on the server.")
 		local rejections = assert(self.remote.rejections, "RemoteRejections should exist on the server.")
 
-		remoteInstance.OnServerInvoke = function(player, port, ...)
+		remoteInstance.OnServerInvoke = function(player, predictionId, port, ...)
+			local ok, cause = PredictionsShared.validatePredictionId(predictionId)
+			if not ok then
+				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+				error(`{rejections:getName()} received an invalid prediction id`, 0)
+			end
+
 			local callback = if type(port) == "string" then self.connectionMap[port] else nil
 			if not callback then
 				rejections:reject(player, "unknown port")
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				error(`{rejections:getName()} has no such port`, 0)
 			end
 
 			if not rateLimiter:tryConsume(player, port) then
 				rejections:reject(player, "rate limited", port)
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				error(`{rejections:getName()} is rate limited; try again shortly`, 0)
 			end
 
-			local ok, cause = self.remote.argTypechecker:matches(...)
+			ok, cause = self.remote.argTypechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", port, cause:formatErr())
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				error(`{rejections:getName()} received invalid arguments`, 0)
 			end
 
-			return self.remote.retTypechecker:check(callback(player, ...))
+			if predictionId then
+				PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+				local results = table.pack(pcall(callback, player, ...))
+				PredictionsServer.finishPrediction(player, predictionId)
+				if not results[1] then
+					error(results[2], 0)
+				end
+				return self.remote.retTypechecker:check(table.unpack(results, 2, results.n))
+			else
+				return self.remote.retTypechecker:check(callback(player, ...))
+			end
 		end
 	end
 
@@ -129,8 +157,48 @@ end
 function RemoteFnSwitchboard.invokeServer<T..., R...>(self: RemoteFnSwitchboard<T..., R...>, port: string, ...: T...): R...
 	assert(RunService:IsClient(), "RemoteFnSwitchboard.invokeServer can only be called from the client")
 	return self.remote.retTypechecker:check(
-		self.remote.loader:assertInstance():InvokeServer(port, self.remote.argTypechecker:check(...))
+		self.remote.loader:assertInstance():InvokeServer(false, port, self.remote.argTypechecker:check(...))
 	)
+end
+
+--[=[
+	@method invokeServerPredicted
+	@within FunctionSwitchboard
+	@client
+	@yields
+
+	Calls the server callback for `port` and returns what it returns, showing `predictions` on their replicators until
+	the server has handled this call. Build each prediction with a replicator's `prediction` method.
+
+	The server must make this call's replicator changes before its handler returns. See
+	[Client prediction](https://github.com/JDevon/sencha#client-prediction).
+
+	@param predictions { Prediction }
+	@param port string
+	@param ... T...
+	@return R...
+]=]
+function RemoteFnSwitchboard.invokeServerPredicted<T..., R...>(
+	self: RemoteFnSwitchboard<T..., R...>,
+	predictions: { PredictionsClient.PredictionRequest },
+	port: string,
+	...: T...
+): R...
+	assert(RunService:IsClient(), "RemoteFnSwitchboard.invokeServerPredicted can only be called from the client")
+	if #predictions == 0 then
+		error("invokeServerPredicted needs at least one prediction", 2)
+	end
+
+	local args = table.pack(self.remote.argTypechecker:check(...))
+	local id = PredictionsClient.beginPrediction(predictions)
+	local instance = self.remote.loader:assertInstance()
+	local results = table.pack(pcall(instance.InvokeServer, instance, id, port, table.unpack(args, 1, args.n)))
+	if not results[1] then
+		PredictionsClient.settle(id)
+		error(results[2], 0)
+	end
+
+	return self.remote.retTypechecker:check(table.unpack(results, 2, results.n))
 end
 
 --[=[

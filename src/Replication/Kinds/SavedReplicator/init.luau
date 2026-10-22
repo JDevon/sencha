@@ -5,6 +5,7 @@ local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.ReplicationClient.ClientReplicator)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
@@ -63,6 +64,15 @@ export type SavedReplicator<D, T, P> = typeof(setmetatable(
 				callback: (newValue: T, oldValue: T, patch: P) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (self: SavedReplicator<D, T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (self: SavedReplicator<D, T, P>) -> T,
+			onConfirmedChanged: (
+				self: SavedReplicator<D, T, P>,
+				callback: (player: Player, newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
+			prediction: (
+				self: SavedReplicator<D, T, P>,
+				predict: ((value: T) -> T) | P
+			) -> PredictionsClient.PredictionRequest,
 			isLoaded: (self: SavedReplicator<D, T, P>) -> boolean,
 		},
 	}
@@ -101,6 +111,9 @@ end
 	On the client, errors if the value hasn't arrived yet. Call [Sencha.waitForReplicators] while loading, or use
 	[SavedReplicator:getAsync] or [SavedReplicator:observe] in code that may run earlier.
 
+	On the client, this includes pending predictions. [SavedReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@param player Player? -- required on the server, left out on the client
 	@return T
 ]=]
@@ -128,6 +141,9 @@ end
 
 	Returns the current value, yielding until it's available. On the server, waits for the player's saved data to load.
 
+	On the client, this includes pending predictions. [SavedReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@param player Player? -- required on the server, left out on the client
 	@return T
 ]=]
@@ -151,6 +167,9 @@ end
 
 	On the server, the change is sent to clients before `callback` runs, so anything it changes in response reaches
 	clients after the change that caused it.
+
+	On the client, this also fires when a prediction is made, and again if it's rolled back. Use
+	[SavedReplicator:onConfirmedChanged] to only hear about the server's changes.
 
 	@param callback (player: Player, newValue: T, oldValue: T) -> ()
 	@return Disconnect
@@ -182,6 +201,8 @@ end
 	end)
 	```
 
+	This includes predictions: it fires when a prediction is made, and again if it's rolled back.
+
 	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
@@ -199,6 +220,9 @@ end
 	config receive patches; calling this on one without errors.
 
 	The first value is a whole value, so it doesn't fire this; use [SavedReplicator:onChanged] to see every change.
+
+	Patches always come from the server: predictions don't fire this, and `newValue` and `oldValue` are the
+	server's values.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -225,11 +249,93 @@ end
 	local research = ReactObservableValue.useObservableValue(ResearchNetwork.researchReplicator:getObservable())
 	```
 
+	The observable includes pending predictions, like [SavedReplicator:get].
+
 	@return ObservableValue<T>
 ]=]
 function SavedReplicator.getObservable<D, T, P>(self: SavedReplicator<D, T, P>): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `SavedReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
+end
+
+--[=[
+	@method getConfirmed
+	@within SavedReplicator
+	@client
+
+	Returns the value the server sent, without any pending predictions. [SavedReplicator:get] returns the predicted
+	value while a prediction is pending; use this when code must only act on what the server has confirmed. Errors if
+	the value hasn't arrived yet.
+
+	@return T
+]=]
+function SavedReplicator.getConfirmed<D, T, P>(self: SavedReplicator<D, T, P>): T
+	assert(RunService:IsClient(), `SavedReplicator:getConfirmed can only be called on the client`)
+	return getClientReplicator(self):getConfirmed()
+end
+
+--[=[
+	@method onConfirmedChanged
+	@within SavedReplicator
+	@client
+
+	Calls `callback` when the server's value changes, not for predictions or the initial value. `player` is always the
+	local player.
+
+	[SavedReplicator:onChanged] also fires for predictions, and again if a wrong prediction is rolled back. Use this
+	instead for effects that should only change for confirmed values:
+
+	```lua
+	ResearchNetwork.researchReplicator:onConfirmedChanged(function(_player, research, oldResearch)
+		print(`the server confirmed {#research} researched items`)
+	end)
+	```
+
+	@param callback (player: Player, newValue: T, oldValue: T) -> ()
+	@return Disconnect
+]=]
+function SavedReplicator.onConfirmedChanged<D, T, P>(
+	self: SavedReplicator<D, T, P>,
+	callback: (player: Player, newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	assert(RunService:IsClient(), `SavedReplicator:onConfirmedChanged can only be called on the client`)
+	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
+		callback(Players.LocalPlayer, newValue, oldValue)
+	end)
+end
+
+--[=[
+	@method prediction
+	@within SavedReplicator
+	@client
+
+	Builds a prediction for this replicator. The returned prediction can be used with a predicted remote call such as
+	`invokeServerPredicted` or `fireServerPredicted`. While the call is pending, [SavedReplicator:get],
+	[SavedReplicator:observe] and [SavedReplicator:onChanged] show the value with the prediction applied; it's removed
+	when the server confirms the call.
+
+	`predict` is either a function that returns the predicted value, or a patch on a replicator with an incremental
+	config. A patch is applied with the config's `apply`, the same way the server's patches are.
+
+	```lua
+	ResearchNetwork.researchRemote:invokeServerPredicted({
+		ResearchNetwork.researchReplicator:prediction(function(research)
+			local newResearch = table.clone(research)
+			table.insert(newResearch, "drills")
+			return newResearch
+		end),
+	}, "drills")
+	```
+
+	@param predict ((value: T) -> T) | P
+	@return Prediction
+]=]
+function SavedReplicator.prediction<D, T, P>(
+	self: SavedReplicator<D, T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	assert(RunService:IsClient(), `SavedReplicator:prediction can only be called on the client`)
+	return getClientReplicator(self):prediction(predict)
 end
 
 --[=[

@@ -6,6 +6,7 @@ local ReplicationServer = require(script.Parent.Parent.Parent.ReplicationServer)
 local ReplicationShared = require(script.Parent.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.Parent.ReplicationClient.ClientReplicator)
+local PredictionsClient = require(script.Parent.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local noYielding = require(script.Parent.Parent.Parent.Parent.Util.noYielding)
@@ -73,6 +74,15 @@ export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 				callback: (newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (self: TemporaryGlobalReplicator<T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (self: TemporaryGlobalReplicator<T, P>) -> T,
+			onConfirmedChanged: (
+				self: TemporaryGlobalReplicator<T, P>,
+				callback: (newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
+			prediction: (
+				self: TemporaryGlobalReplicator<T, P>,
+				predict: ((value: T) -> T) | P
+			) -> PredictionsClient.PredictionRequest,
 			isLoaded: (self: TemporaryGlobalReplicator<T, P>) -> boolean,
 		},
 	}
@@ -120,6 +130,9 @@ end
 	On the client, errors if the value hasn't arrived yet. Call [Sencha.waitForReplicators] while loading, or use
 	[TemporaryGlobalReplicator:getAsync] or [TemporaryGlobalReplicator:observe] in code that may run earlier.
 
+	On the client, this includes pending predictions. [TemporaryGlobalReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@return T
 ]=]
 function TemporaryGlobalReplicator.get<T, P>(self: TemporaryGlobalReplicator<T, P>): T
@@ -137,6 +150,9 @@ end
 
 	Returns the current value, yielding until it's available. The server value always exists, so this only yields on the
 	client.
+
+	On the client, this includes pending predictions. [TemporaryGlobalReplicator:getConfirmed] returns the server's value
+	without them.
 
 	@return T
 ]=]
@@ -249,6 +265,9 @@ end
 	On the server, the change is sent to clients before `callback` runs, so anything it changes in response reaches
 	clients after the change that caused it.
 
+	On the client, this also fires when a prediction is made, and again if it's rolled back. Use
+	[TemporaryGlobalReplicator:onConfirmedChanged] to only hear about the server's changes.
+
 	@param callback (newValue: T, oldValue: T) -> ()
 	@return Disconnect
 ]=]
@@ -283,6 +302,8 @@ end
 	end)
 	```
 
+	This includes predictions: it fires when a prediction is made, and again if it's rolled back.
+
 	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
@@ -304,6 +325,9 @@ end
 
 	Whole values (the first value, or a `set`) don't fire this; use
 	[TemporaryGlobalReplicator:onChanged] to see every change.
+
+	Patches always come from the server: predictions don't fire this, and `newValue` and `oldValue` are the
+	server's values.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -330,6 +354,8 @@ end
 	local isMeteorShower = ReactObservableValue.useObservableValue(EventsNetwork.meteorShowerReplicator:getObservable())
 	```
 
+	The observable includes pending predictions, like [TemporaryGlobalReplicator:get].
+
 	@return ObservableValue<T>
 ]=]
 function TemporaryGlobalReplicator.getObservable<T, P>(
@@ -337,6 +363,85 @@ function TemporaryGlobalReplicator.getObservable<T, P>(
 ): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `TemporaryGlobalReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
+end
+
+--[=[
+	@method getConfirmed
+	@within TemporaryGlobalReplicator
+	@client
+
+	Returns the value the server sent, without any pending predictions. [TemporaryGlobalReplicator:get] returns the
+	predicted value while a prediction is pending; use this when code must only act on what the server has confirmed.
+	Errors if the value hasn't arrived yet.
+
+	@return T
+]=]
+function TemporaryGlobalReplicator.getConfirmed<T, P>(self: TemporaryGlobalReplicator<T, P>): T
+	assert(RunService:IsClient(), `TemporaryGlobalReplicator:getConfirmed can only be called on the client`)
+	return getClientReplicator(self):getConfirmed()
+end
+
+--[=[
+	@method onConfirmedChanged
+	@within TemporaryGlobalReplicator
+	@client
+
+	Calls `callback` when the server's value changes, not for predictions or the initial value.
+
+	[TemporaryGlobalReplicator:onChanged] also fires for predictions, and again if a wrong prediction is rolled back.
+	Use this instead for effects that should only change for confirmed values:
+
+	```lua
+	EventsNetwork.meteorShowerReplicator:onConfirmedChanged(function(isActive, wasActive)
+		if isActive and not wasActive then
+			announceMeteorShower()
+		end
+	end)
+	```
+
+	@param callback (newValue: T, oldValue: T) -> ()
+	@return Disconnect
+]=]
+function TemporaryGlobalReplicator.onConfirmedChanged<T, P>(
+	self: TemporaryGlobalReplicator<T, P>,
+	callback: (newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	assert(RunService:IsClient(), `TemporaryGlobalReplicator:onConfirmedChanged can only be called on the client`)
+	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
+		callback(newValue, oldValue)
+	end)
+end
+
+--[=[
+	@method prediction
+	@within TemporaryGlobalReplicator
+	@client
+
+	Builds a prediction for this replicator. The returned prediction can be used with a predicted remote call such as
+	`invokeServerPredicted` or `fireServerPredicted`. While the call is pending, [TemporaryGlobalReplicator:get],
+	[TemporaryGlobalReplicator:observe] and [TemporaryGlobalReplicator:onChanged] show the value with the prediction
+	applied; it's removed when the server confirms the call.
+
+	`predict` is either a function that returns the predicted value, or a patch on a replicator with an incremental
+	config. A patch is applied with the config's `apply`, the same way the server's patches are.
+
+	```lua
+	EventsNetwork.startMeteorShowerRemote:fireServerPredicted({
+		EventsNetwork.meteorShowerReplicator:prediction(function()
+			return true
+		end),
+	})
+	```
+
+	@param predict ((value: T) -> T) | P
+	@return Prediction
+]=]
+function TemporaryGlobalReplicator.prediction<T, P>(
+	self: TemporaryGlobalReplicator<T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	assert(RunService:IsClient(), `TemporaryGlobalReplicator:prediction can only be called on the client`)
+	return getClientReplicator(self):prediction(predict)
 end
 
 --[=[

@@ -4,11 +4,14 @@ local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local gt = require(script.Parent.Parent.Parent.Parent.GreenTea)
 local RemoteLoader = require(script.Parent.Parent.RemoteLoader)
 local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
-local Signal = require(script.Parent.Parent.Parent.Parent.Signal)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 
+local runListeners = require(script.Parent.Parent.Parent.Util.runListeners)
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
 
 --[=[
@@ -31,12 +34,14 @@ export type Event<T...> = typeof(setmetatable(
 		typechecker: RemoteTypechecker.RemoteTypechecker<T...>,
 		rateLimiter: RateLimiter.RateLimiter?,
 		rejections: RemoteRejections.RemoteRejections?,
-		serverListeners: Signal.Signal<(Player, ...any)>,
+		listeners: { runListeners.Listener },
+		isUnreliable: boolean,
 		serverConnection: RBXScriptConnection?,
 	},
 	{} :: {
 		__index: {
 			fireServer: (Event<T...>, T...) -> (),
+			fireServerPredicted: (Event<T...>, predictions: { PredictionsClient.PredictionRequest }, T...) -> (),
 			fireClient: (Event<T...>, Player, T...) -> (),
 			fireAllClients: (Event<T...>, T...) -> (),
 			onClientEvent: (Event<T...>, (T...) -> ()) -> toDisconnect.Disconnect,
@@ -74,9 +79,12 @@ function RemoteEvent.new<T...>(isUnreliable: boolean, ...: T...): Event<T...>
 	self.loader = RemoteLoader.new(remoteEventInstance)
 	self.typechecker = RemoteTypechecker.fromArgs(gt.args(...))
 
-	self.serverListeners = Signal.new()
+	self.listeners = {}
+	self.isUnreliable = isUnreliable
+	self.cleanup:add(function()
+		table.clear(self.listeners)
+	end)
 	self.serverConnection = nil :: RBXScriptConnection?
-	self.cleanup:add(self.serverListeners)
 
 	DefineHooks.set(self, function(name, parent)
 		self.loader:load(name, parent)
@@ -100,7 +108,39 @@ end
 ]=]
 function RemoteEvent.fireServer<T...>(self: Event<T...>, ...: T...)
 	assert(RunService:IsClient(), "RemoteEvent.fireServer can only be called from the client")
-	self.loader:assertInstance():FireServer(self.typechecker:check(...))
+	self.loader:assertInstance():FireServer(false, self.typechecker:check(...))
+end
+
+--[=[
+	@method fireServerPredicted
+	@within Event
+	@client
+
+	Sends the arguments to the server, and shows `predictions` on their replicators until the server has handled this
+	call. Build each prediction with a replicator's `prediction` method. Unreliable events can't be predicted.
+
+	The server must make this call's replicator changes before its handler returns. See
+	[Client prediction](https://github.com/JDevon/sencha#client-prediction).
+
+	@param predictions { Prediction }
+	@param ... T...
+]=]
+function RemoteEvent.fireServerPredicted<T...>(
+	self: Event<T...>,
+	predictions: { PredictionsClient.PredictionRequest },
+	...: T...
+)
+	assert(RunService:IsClient(), "RemoteEvent.fireServerPredicted can only be called from the client")
+	if self.isUnreliable then
+		error("Unreliable events can't be predicted: a dropped message would never be confirmed", 2)
+	end
+	if #predictions == 0 then
+		error("fireServerPredicted needs at least one prediction", 2)
+	end
+
+	local args = table.pack(self.typechecker:check(...))
+	local id = PredictionsClient.beginPrediction(predictions)
+	self.loader:assertInstance():FireServer(id, table.unpack(args, 1, args.n))
 end
 
 --[=[
@@ -167,25 +207,52 @@ function RemoteEvent.onServerEvent<T...>(self: Event<T...>, callback: (Player, T
 	local rejections = assert(self.rejections, "RemoteRejections should exist on the server.")
 	if not self.serverConnection then
 		-- one connection per remote, so each call from a client spends one token and is type-checked once
-		local connection = self.loader:assertInstance().OnServerEvent:Connect(function(player, ...)
+		local connection = self.loader:assertInstance().OnServerEvent:Connect(function(player, predictionId, ...)
+			local ok, cause = PredictionsShared.validatePredictionId(predictionId)
+			if not ok then
+				rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+				return
+			end
+
 			if not rateLimiter:tryConsume(player) then
 				rejections:reject(player, "rate limited")
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
-			local ok, cause = self.typechecker:matches(...)
+			ok, cause = self.typechecker:matches(...)
 			if not ok then
 				rejections:reject(player, "invalid arguments", nil, cause:formatErr())
+				PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 				return
 			end
 
-			self.serverListeners:Fire(player, ...)
+			if predictionId then
+				PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+				runListeners(player, self.listeners, table.pack(...), function()
+					PredictionsServer.finishPrediction(player, predictionId)
+				end)
+			else
+				runListeners(player, self.listeners, table.pack(...))
+			end
 		end)
 		self.serverConnection = connection
 		self.cleanup:add(connection)
 	end
 
-	return toDisconnect(self.serverListeners:Connect(callback))
+	local listener = { callback = callback, connected = true }
+	table.insert(self.listeners, listener)
+	return function()
+		if not listener.connected then
+			return
+		end
+
+		listener.connected = false
+		local index = table.find(self.listeners, listener)
+		if index then
+			table.remove(self.listeners, index)
+		end
+	end
 end
 
 --[=[

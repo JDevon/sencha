@@ -6,6 +6,9 @@ local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local RemoteRejections = require(script.Parent.Parent.RemoteRejections)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
+local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
+local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 
 --[=[
 	@class Function
@@ -31,6 +34,11 @@ export type Function<T..., R...> = typeof(setmetatable(
 	{} :: {
 		__index: {
 			invokeServer: (Function<T..., R...>, T...) -> R...,
+			invokeServerPredicted: (
+				Function<T..., R...>,
+				predictions: { PredictionsClient.PredictionRequest },
+				T...
+			) -> R...,
 			onServerInvoke: (Function<T..., R...>, (Player, T...) -> R...) -> (),
 			rateLimit: (Function<T..., R...>, RateLimiter.Limit) -> Function<T..., R...>,
 			destroy: (Function<T..., R...>) -> (),
@@ -87,7 +95,45 @@ end
 ]=]
 function RemoteFunction.invokeServer<T..., R...>(self: Function<T..., R...>, ...: T...): R...
 	assert(RunService:IsClient(), "RemoteFunction.invokeServer can only be called from the client")
-	return self.retTypechecker:check(self.loader:assertInstance():InvokeServer(self.argTypechecker:check(...)))
+	return self.retTypechecker:check(self.loader:assertInstance():InvokeServer(false, self.argTypechecker:check(...)))
+end
+
+--[=[
+	@method invokeServerPredicted
+	@within Function
+	@client
+	@yields
+
+	Calls the server's callback and returns what it returns, showing `predictions` on their replicators until the
+	server has handled this call. Build each prediction with a replicator's `prediction` method.
+
+	The server must make this call's replicator changes before its handler returns. See
+	[Client prediction](https://github.com/JDevon/sencha#client-prediction).
+
+	@param predictions { Prediction }
+	@param ... T...
+	@return R...
+]=]
+function RemoteFunction.invokeServerPredicted<T..., R...>(
+	self: Function<T..., R...>,
+	predictions: { PredictionsClient.PredictionRequest },
+	...: T...
+): R...
+	assert(RunService:IsClient(), "RemoteFunction.invokeServerPredicted can only be called from the client")
+	if #predictions == 0 then
+		error("invokeServerPredicted needs at least one prediction", 2)
+	end
+
+	local args = table.pack(self.argTypechecker:check(...))
+	local id = PredictionsClient.beginPrediction(predictions)
+	local instance = self.loader:assertInstance()
+	local results = table.pack(pcall(instance.InvokeServer, instance, id, table.unpack(args, 1, args.n)))
+	if not results[1] then
+		PredictionsClient.settle(id)
+		error(results[2], 0)
+	end
+
+	return self.retTypechecker:check(table.unpack(results, 2, results.n))
 end
 
 --[=[
@@ -103,19 +149,37 @@ function RemoteFunction.onServerInvoke<T..., R...>(self: Function<T..., R...>, c
 	assert(RunService:IsServer(), "RemoteFunction.onServerInvoke can only be called from the server")
 	local rateLimiter = assert(self.rateLimiter, "RateLimiter should exist on the server.")
 	local rejections = assert(self.rejections, "RemoteRejections should exist on the server.")
-	self.loader:assertInstance().OnServerInvoke = function(player, ...)
+	self.loader:assertInstance().OnServerInvoke = function(player, predictionId, ...)
+		local ok, cause = PredictionsShared.validatePredictionId(predictionId)
+		if not ok then
+			rejections:reject(player, "invalid prediction id", nil, cause:formatErr())
+			error(`{rejections:getName()} received an invalid prediction id`, 0)
+		end
+
 		if not rateLimiter:tryConsume(player) then
 			rejections:reject(player, "rate limited")
+			PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 			error(`{rejections:getName()} is rate limited; try again shortly`, 0)
 		end
 
-		local ok, cause = self.argTypechecker:matches(...)
+		ok, cause = self.argTypechecker:matches(...)
 		if not ok then
 			rejections:reject(player, "invalid arguments", nil, cause:formatErr())
+			PredictionsServer.tryAcknowledgeRejected(player, predictionId)
 			error(`{rejections:getName()} received invalid arguments`, 0)
 		end
 
-		return self.retTypechecker:check(callback(player, ...))
+		if predictionId then
+			PredictionsServer.waitForTurnAsync(player, predictionId, rejections:getName())
+			local results = table.pack(pcall(callback, player, ...))
+			PredictionsServer.finishPrediction(player, predictionId)
+			if not results[1] then
+				error(results[2], 0)
+			end
+			return self.retTypechecker:check(table.unpack(results, 2, results.n))
+		else
+			return self.retTypechecker:check(callback(player, ...))
+		end
 	end
 end
 

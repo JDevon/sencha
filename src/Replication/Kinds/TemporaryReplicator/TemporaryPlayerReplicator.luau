@@ -7,6 +7,7 @@ local ReplicationServer = require(script.Parent.Parent.Parent.ReplicationServer)
 local ReplicationShared = require(script.Parent.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.Parent.ReplicationClient.ClientReplicator)
+local PredictionsClient = require(script.Parent.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local noYielding = require(script.Parent.Parent.Parent.Parent.Util.noYielding)
@@ -92,6 +93,15 @@ export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 				callback: (player: Player, newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (self: TemporaryPlayerReplicator<T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (self: TemporaryPlayerReplicator<T, P>) -> T,
+			onConfirmedChanged: (
+				self: TemporaryPlayerReplicator<T, P>,
+				callback: (player: Player, newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
+			prediction: (
+				self: TemporaryPlayerReplicator<T, P>,
+				predict: ((value: T) -> T) | P
+			) -> PredictionsClient.PredictionRequest,
 			isLoaded: (self: TemporaryPlayerReplicator<T, P>) -> boolean,
 		},
 	}
@@ -149,6 +159,9 @@ end
 	On the client, errors if the value hasn't arrived yet. Call [Sencha.waitForReplicators] while loading, or use
 	[TemporaryPlayerReplicator:getAsync] or [TemporaryPlayerReplicator:observe] in code that may run earlier.
 
+	On the client, this includes pending predictions. [TemporaryPlayerReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@param player Player? -- required on the server, left out on the client
 	@return T
 ]=]
@@ -168,6 +181,9 @@ end
 
 	Returns the current value, yielding until it's available. Server values always exist, so this only yields on the
 	client.
+
+	On the client, this includes pending predictions. [TemporaryPlayerReplicator:getConfirmed] returns the server's value
+	without them.
 
 	@param player Player? -- required on the server, left out on the client
 	@return T
@@ -292,6 +308,9 @@ end
 	On the server, the change is sent to clients before `callback` runs, so anything it changes in response reaches
 	clients after the change that caused it.
 
+	On the client, this also fires when a prediction is made, and again if it's rolled back. Use
+	[TemporaryPlayerReplicator:onConfirmedChanged] to only hear about the server's changes.
+
 	@param callback (player: Player, newValue: T, oldValue: T) -> ()
 	@return Disconnect
 ]=]
@@ -326,6 +345,8 @@ end
 	end)
 	```
 
+	This includes predictions: it fires when a prediction is made, and again if it's rolled back.
+
 	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
@@ -347,6 +368,9 @@ end
 
 	Whole values (the first value, or a `set`) don't fire this; use
 	[TemporaryPlayerReplicator:onChanged] to see every change.
+
+	Patches always come from the server: predictions don't fire this, and `newValue` and `oldValue` are the
+	server's values.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -373,6 +397,8 @@ end
 	local coins = ReactObservableValue.useObservableValue(CurrencyNetwork.coinsReplicator:getObservable())
 	```
 
+	The observable includes pending predictions, like [TemporaryPlayerReplicator:get].
+
 	@return ObservableValue<T>
 ]=]
 function TemporaryPlayerReplicator.getObservable<T, P>(
@@ -380,6 +406,86 @@ function TemporaryPlayerReplicator.getObservable<T, P>(
 ): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `TemporaryPlayerReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
+end
+
+--[=[
+	@method getConfirmed
+	@within TemporaryPlayerReplicator
+	@client
+
+	Returns the value the server sent, without any pending predictions. [TemporaryPlayerReplicator:get] returns the
+	predicted value while a prediction is pending; use this when code must only act on what the server has confirmed.
+	Errors if the value hasn't arrived yet.
+
+	@return T
+]=]
+function TemporaryPlayerReplicator.getConfirmed<T, P>(self: TemporaryPlayerReplicator<T, P>): T
+	assert(RunService:IsClient(), `TemporaryPlayerReplicator:getConfirmed can only be called on the client`)
+	return getClientReplicator(self):getConfirmed()
+end
+
+--[=[
+	@method onConfirmedChanged
+	@within TemporaryPlayerReplicator
+	@client
+
+	Calls `callback` when the server's value changes, not for predictions or the initial value. `player` is always the
+	local player.
+
+	[TemporaryPlayerReplicator:onChanged] also fires for predictions, and again if a wrong prediction is rolled back.
+	Use this instead for effects that should only change for confirmed values:
+
+	```lua
+	CurrencyNetwork.coinsReplicator:onConfirmedChanged(function(_player, coins, oldCoins)
+		if coins > oldCoins then
+			playCoinsGainedSound() -- never plays for a prediction that gets rolled back
+		end
+	end)
+	```
+
+	@param callback (player: Player, newValue: T, oldValue: T) -> ()
+	@return Disconnect
+]=]
+function TemporaryPlayerReplicator.onConfirmedChanged<T, P>(
+	self: TemporaryPlayerReplicator<T, P>,
+	callback: (player: Player, newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	assert(RunService:IsClient(), `TemporaryPlayerReplicator:onConfirmedChanged can only be called on the client`)
+	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
+		callback(Players.LocalPlayer, newValue, oldValue)
+	end)
+end
+
+--[=[
+	@method prediction
+	@within TemporaryPlayerReplicator
+	@client
+
+	Builds a prediction for this replicator. The returned prediction can be used with a predicted remote call such as
+	`invokeServerPredicted` or `fireServerPredicted`. While the call is pending, [TemporaryPlayerReplicator:get],
+	[TemporaryPlayerReplicator:observe] and [TemporaryPlayerReplicator:onChanged] show the value with the prediction
+	applied; it's removed when the server confirms the call.
+
+	`predict` is either a function that returns the predicted value, or a patch on a replicator with an incremental
+	config. A patch is applied with the config's `apply`, the same way the server's patches are.
+
+	```lua
+	CurrencyNetwork.buyItemRemote:invokeServerPredicted({
+		CurrencyNetwork.coinsReplicator:prediction(function(coins)
+			return coins - 10
+		end),
+	}, "sword")
+	```
+
+	@param predict ((value: T) -> T) | P
+	@return Prediction
+]=]
+function TemporaryPlayerReplicator.prediction<T, P>(
+	self: TemporaryPlayerReplicator<T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	assert(RunService:IsClient(), `TemporaryPlayerReplicator:prediction can only be called on the client`)
+	return getClientReplicator(self):prediction(predict)
 end
 
 --[=[

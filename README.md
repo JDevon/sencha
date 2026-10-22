@@ -26,6 +26,7 @@ Full API reference at [jdevon.github.io/sencha](https://jdevon.github.io/sencha/
 - **[Saved data without lock-in](#saved-replicators)**: replicate parts of a player's save file from any data store,
   with the save data fully typed.
 - **[Incremental updates](#incremental-updates)**: send small patches instead of whole values.
+- **[Client prediction](#client-prediction)**: predict the result of server requests
 - **[React ready](#react)**: `getObservable` works with the ReactObservableValue hooks.
 
 ## Install
@@ -36,7 +37,7 @@ Install with [Wally](https://wally.run) by adding Sencha and GreenTea to your `w
 
 ```toml
 [dependencies]
-Sencha = "jdevon/sencha@0.1.0"
+Sencha = "jdevon/sencha@0.2.0"
 GreenTea = "corecii/greentea@0.4.11"
 ```
 
@@ -98,6 +99,9 @@ copy of**.
 
 Unreliable events may drop messages or deliver them out of order, with payloads limited to roughly 900 bytes.
 
+Reliable remotes also have predicted versions of their client calls, `fireServerPredicted` and
+`invokeServerPredicted`. See [Client prediction](#client-prediction).
+
 ### Rate limits and rejected calls
 
 The server checks calls from clients in this order: **port** (switchboards), **rate limit**, then **argument types**.
@@ -145,6 +149,11 @@ replicator, so the server always chooses what becomes public.
 | `getObservable` | client | returns an [ObservableValue](https://github.com/JDevon/observable-value) that follows the value |
 | `isLoaded` | client | whether the value has arrived |
 | `onUpdateReceived` | client | fires for each patch received (see [Incremental updates](#incremental-updates)) |
+| `prediction` | client | builds a prediction for this replicator (see [Client prediction](#client-prediction)) |
+| `getConfirmed` / `onConfirmedChanged` | client | use the server's value, without predictions |
+
+On the client, `get`, `getAsync`, `observe`, `onChanged` and `getObservable` include any pending
+[predictions](#client-prediction). Without predictions, they're the server's value.
 
 On the server, player replicators take the player as their first argument (`get(player)`, `set(player, value)`), and
 `onChanged` passes the player first on both sides.
@@ -158,17 +167,6 @@ On the server, player replicators take the player as their first argument (`get(
 - **`tryUpdate` can't yield.** Its function runs without yielding, so nothing else can change the value between
   reading and setting it. A yield errors.
 - **Values are frozen** on both sides.
-
-### React
-
-Use `getObservable` with [ReactObservableValue](https://github.com/JDevon/react-observable-value):
-
-```lua
-local function CoinsLabel()
-    local coins = ReactObservableValue.useObservableValue(CurrencyNetwork.coinsReplicator:getObservable())
-    return React.createElement("TextLabel", { Text = `{coins} coins` })
-end
-```
 
 ### Saved replicators
 
@@ -272,6 +270,75 @@ end, {
   value. The server also checks that each saved replicator's `apply` matches its `diff`: in Studio a mismatch errors,
   and in live games it warns once per replicator.
 - `onUpdateReceived` only fires for patches. Use `onChanged` to see every change.
+
+### Client prediction
+
+A predicted remote call shows its result on the client straight away, instead of after a round trip to the server. Once
+the server has handled the call, its value replaces the prediction in a single step. A correct prediction never flickers
+or counts twice.
+
+```lua
+local bought = ShopNetwork.buyItemRemote:invokeServerPredicted({
+    CurrencyNetwork.coinsReplicator:prediction(function(coins)
+        return coins - price
+    end),
+    BackpackNetwork.backpackReplicator:prediction({ sword = 1 }), -- a patch, on an incremental replicator
+}, "sword")
+```
+
+- **Build predictions with a replicator's `prediction` method.** It takes either a function that returns the predicted
+  value, or a patch for a replicator with an incremental config. It checks the prediction against that replicator's
+  types.
+- **Send them with a predicted call.** Events and event switchboards use `fireServerPredicted`. Functions and function
+  switchboards use `invokeServerPredicted`. Unreliable events can't be predicted because a dropped message would never
+  be confirmed.
+- **One call can predict several replicators**, like coins and a backpack. They're confirmed together.
+
+#### What each method shows
+
+| Method | While a prediction is pending |
+|---|---|
+| `get`, `getAsync`, `observe`, `onChanged`, `getObservable` | the predicted value |
+| `getConfirmed`, `onConfirmedChanged` | the server's value |
+| `onUpdateReceived` | only the server's patches |
+
+UI built on `observe`, `onChanged` or the ReactObservableValue hooks shows predictions without any changes. A correct
+prediction fires `onChanged` once, when it's made. A wrong one fires it again when it's rolled back to the server's
+value. Use `onConfirmedChanged` for callbacks that should only run for confirmed changes.
+
+#### How it stays exact
+
+While a player's predicted call is being handled, the server holds back that player's replicator updates. It sends them
+together with the call's confirmation. The client then applies the server's changes and removes the prediction at the
+same time. This has a few consequences:
+
+- **A predicted call's handler must make all of its replicator changes before it returns.** Yielding inside the handler
+  is fine. Changes from other threads are fine too, as long as they happen before it returns. A change made later (for
+  example in a `task.delay`) arrives after the prediction was removed. The value then briefly shows the server's old
+  value.
+- **A player's predicted calls are handled one at a time,** in the order they arrive. Normal calls aren't affected.
+- **A player's other updates wait while their predicted call is handled.** That's usually a few milliseconds. If a
+  handler takes more than 2 seconds, Sencha stops waiting and removes the prediction. In Studio it also errors.
+- **A prediction the server never confirms** (for example after a lost connection) is removed after 10 seconds.
+
+#### When not to predict
+
+- **The server would refuse the request.** A prediction the server won't accept shows briefly, then rolls back. Check
+  what you can on the client first, such as whether there's room. Skip the prediction (or the request) when it would
+  fail.
+- **Values the server changes over time,** like regeneration or a countdown. Don't predict them. Replicate a start time
+  and a rate instead, and work out the current value on the client.
+
+### React
+
+Use `getObservable` with [ReactObservableValue](https://github.com/JDevon/react-observable-value):
+
+```lua
+local function CoinsLabel()
+    local coins = ReactObservableValue.useObservableValue(CurrencyNetwork.coinsReplicator:getObservable())
+    return React.createElement("TextLabel", { Text = `{coins} coins` })
+end
+```
 
 ## Patterns
 
@@ -414,3 +481,5 @@ end)
    incremental config's `apply` or `diff`** ([saved](https://jdevon.github.io/sencha/api/Sencha#SavedIncrementalConfig),
    [temporary](https://jdevon.github.io/sencha/api/Sencha#TemporaryIncrementalConfig)). A yield errors with a traceback
    to the line that waited.
+7. **A predicted call's handler must make all of its replicator changes before it returns.** See
+   [How it stays exact](#how-it-stays-exact).

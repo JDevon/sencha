@@ -1,9 +1,38 @@
 {
 	"luau-lsp.sourcemap.rojoProjectFile": "dev.project.json",
 	"luau-lsp.platform.type": "roblox",
+	"luau-lsp.completion.imports.requireStyle": "alwaysRelative",
 	"luau-lsp.ignoreGlobs": [
 		"**/_Index/**"
 	],
+	"[lua]": {
+		"editor.formatOnSave": true,
+		"editor.defaultFormatter": "JohnnyMorganz.stylua"
+	},
+	"[luau]": {
+		"editor.formatOnSave": true,
+		"editor.defaultFormatter": "JohnnyMorganz.stylua",
+		"editor.quickSuggestions": {
+			"other": true,
+			"comments": false,
+			"strings": true
+		}
+	},
+	"luau-lsp.completion.imports.enabled": true,
+	"luau-lsp.completion.imports.separateGroupsWithLine": true,
+	"luau-lsp.fflags.override": {
+		"LuauAutocompleteDynamicLimits": "false",
+		"LuauTinyControlFlowAnalysis": "true",
+		"LuauTarjanChildLimit": "100000",
+		"LuauTypeInferIterationLimit": "10000",
+		"LuauCheckRecursionLimit": "10000",
+		"LuauTypeInferTypePackLoopLimit": "10000",
+		"LuauTypeInferRecursionLimit": "10000",
+		"LuauTableTypeMaximumStringifierLength": "100000000",
+		"LuauTypeMaximumStringiferLength": "100000000",
+		"LuauAutocompleteCheckTimeoutMs": "100000000",
+		"LuauAutocompleteTableKeysNoInitialCharacter": "true"
+	},
 	"cSpell.words": [
 		"getmetatable",
 		"isfrozen",
@@ -11,6 +40,7 @@
 		"pcall",
 		"resends",
 		"setmetatable",
-		"tostring"
+		"tostring",
+		"xpcall"
 	],
 }

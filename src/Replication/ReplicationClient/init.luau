@@ -5,6 +5,9 @@ local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.ObservableValue)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
+local PredictionsClient = require(script.Parent.Parent.Predictions.PredictionsClient)
+local ReplicationRemotes = require(script.Parent.ReplicationShared.ReplicationRemotes)
+local ChannelBatch = require(script.Parent.ReplicationShared.ChannelRegistry.ChannelBatch)
 
 local FETCH_RETRY_SECONDS = 0.5
 local SLOW_LOAD_WARNING_SECONDS = 5
@@ -17,7 +20,7 @@ local pendingPatches: { [string]: { any } } = {}
 local failedKeys: { [string]: true } = {}
 local channelKeys: { [number]: string } = {}
 
-type StreamMessage = { id: number, payload: ReplicationShared.Payload, key: string? }
+type StreamMessage = { id: number, payload: ReplicationShared.StreamPayload, key: string? }
 
 local ReplicationClient = {}
 ReplicationClient.SLOW_LOAD_WARNING_SECONDS = SLOW_LOAD_WARNING_SECONDS
@@ -92,21 +95,50 @@ function ReplicationClient._initializeChannelValue(channel: ChannelRegistry.Chan
 	end
 end
 
-function ReplicationClient._receiveFromStream(id: number, payload: ReplicationShared.Payload, key: string?)
-	if key then
-		channelKeys[id] = key
-	end
+function ReplicationClient._receiveFromStream(id: number, payload: ReplicationShared.StreamPayload, key: string?)
+	-- a batch isn't for one replicator, so it's handled before the id lookup (it arrives on id 0)
+	if payload.kind == "batch" then
+		ReplicationClient._receiveBatch(payload :: ReplicationShared.BatchPayload)
+	else
+		if key then
+			channelKeys[id] = key
+		end
 
-	local resolvedKey = channelKeys[id]
-	if not resolvedKey then
-		Failures.report(`Received a replicator message for unknown id {id}; it was dropped`)
-		return
-	end
+		local resolvedKey = channelKeys[id]
+		if not resolvedKey then
+			Failures.report(`Received a replicator message for unknown id {id}; it was dropped`)
+			return
+		end
 
-	ReplicationClient._receive(resolvedKey, payload)
+		ReplicationClient._receive(resolvedKey, payload :: ReplicationShared.ReplicatorPayload)
+	end
 end
 
-function ReplicationClient._receive(key: string, payload: ReplicationShared.Payload)
+function ReplicationClient._receiveBatch(batch: ReplicationShared.BatchPayload)
+	ChannelBatch.begin()
+
+	local ok, err = pcall(function()
+		for _, message in batch.messages do
+			ReplicationClient._receiveFromStream(message.id, message.payload, message.key)
+		end
+
+		local settledId = batch.ack or batch.cancel
+		if settledId then
+			PredictionsClient.settle(settledId)
+		end
+	end)
+
+	local deferredChannels = ChannelBatch.finish()
+	for _, channel in deferredChannels do
+		channel:reconcilePredictions()
+	end
+
+	if not ok then
+		error(err, 0)
+	end
+end
+
+function ReplicationClient._receive(key: string, payload: ReplicationShared.ReplicatorPayload)
 	if payload.kind == "value" then
 		ReplicationClient._receiveValue(key, payload :: ReplicationShared.ValuePayload)
 	elseif payload.kind == "patch" then
@@ -161,18 +193,18 @@ function ReplicationClient._startFetch()
 
 	task.spawn(function()
 		DefineHooks.run(
-			ReplicationShared.streamRemote,
-			ReplicationShared.STREAM_REMOTE_NAME,
-			ReplicationShared.SENCHA_MODULE
+			ReplicationRemotes.streamRemote,
+			ReplicationRemotes.STREAM_REMOTE_NAME,
+			ReplicationRemotes.SENCHA_MODULE
 		)
 		DefineHooks.run(
-			ReplicationShared.fetchRemote,
-			ReplicationShared.FETCH_REMOTE_NAME,
-			ReplicationShared.SENCHA_MODULE
+			ReplicationRemotes.fetchRemote,
+			ReplicationRemotes.FETCH_REMOTE_NAME,
+			ReplicationRemotes.SENCHA_MODULE
 		)
 
 		local buffered: { StreamMessage }? = {}
-		ReplicationShared.streamRemote:onClientEvent(function(id, payload, key)
+		ReplicationRemotes.streamRemote:onClientEvent(function(id, payload, key)
 			if buffered then
 				table.insert(buffered, { id = id, payload = payload, key = key })
 			else
@@ -182,7 +214,7 @@ function ReplicationClient._startFetch()
 
 		local snapshot: ReplicationShared.Snapshot? = nil
 		repeat
-			local ok, result = ReplicationShared.fetchRemote:invokeServer()
+			local ok, result = ReplicationRemotes.fetchRemote:invokeServer()
 			if ok then
 				snapshot = result
 			else

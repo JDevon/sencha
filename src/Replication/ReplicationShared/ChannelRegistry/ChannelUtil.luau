@@ -2,6 +2,7 @@ local ReplicationShared = require(script.Parent.Parent)
 
 local noYielding = require(script.Parent.Parent.Parent.Parent.Util.noYielding)
 
+export type Prediction = { id: number, predict: any }
 export type ChannelRead<T> = (player: Player, context: any) -> T
 
 local ChannelUtil = {}
@@ -35,6 +36,20 @@ end
 function ChannelUtil.guardConfiguredRead<T>(read: ChannelRead<T>): ChannelRead<T>
 	return function(player: Player, context: any): T
 		return noYielding(read, player, context)
+	end
+end
+
+function ChannelUtil.applyPrediction<T, P>(
+	incrementalConfig: ReplicationShared.IncrementalConfig<T, P>?,
+	value: any,
+	prediction: Prediction
+): (boolean, any)
+	if type(prediction.predict) == "function" then
+		return pcall(noYielding, prediction.predict, value)
+	else
+		return pcall(function()
+			return incrementalConfig and incrementalConfig.apply(value, prediction.predict)
+		end)
 	end
 end
 
