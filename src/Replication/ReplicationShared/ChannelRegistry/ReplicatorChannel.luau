@@ -148,20 +148,21 @@ function ReplicatorChannel.addPrediction<T, P>(self: ReplicatorChannel<T, P>, pr
 end
 
 function ReplicatorChannel.removePrediction<T, P>(self: ReplicatorChannel<T, P>, id: number)
-	for index, prediction in self.predictions do
-		if prediction.id == id then
+	for index = #self.predictions, 1, -1 do
+		if self.predictions[index].id == id then
 			table.remove(self.predictions, index)
-			return
+			-- no early return/break since multiple predictions with this id are allowed
 		end
 	end
 end
 
-function ReplicatorChannel.reconcilePredictions<T, P>(self: ReplicatorChannel<T, P>)
+function ReplicatorChannel.reconcilePredictions<T, P>(self: ReplicatorChannel<T, P>): { number }
 	local confirmed = self.confirmed:get()
+	local dropped = {}
 
 	if #self.predictions == 0 and not self.hadPredictions then
 		self.shown:set(confirmed)
-		return
+		return dropped
 	end
 
 	local shownValue = confirmed
@@ -182,6 +183,8 @@ function ReplicatorChannel.reconcilePredictions<T, P>(self: ReplicatorChannel<T,
 			ChannelUtil.freezeInPlace(result)
 			shownValue = result
 			table.insert(kept, prediction)
+		else
+			table.insert(dropped, prediction.id)
 		end
 	end
 
@@ -191,6 +194,8 @@ function ReplicatorChannel.reconcilePredictions<T, P>(self: ReplicatorChannel<T,
 	if not ChannelUtil.deepEqual(shownValue, self.shown:get()) then
 		self.shown:set(shownValue)
 	end
+
+	return dropped
 end
 
 return table.freeze({
