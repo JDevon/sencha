@@ -159,6 +159,9 @@ end
 	On the client, errors if the value hasn't arrived yet. Call [Sencha.waitForReplicators] while loading, or use
 	[TemporaryPlayerReplicator:getAsync] or [TemporaryPlayerReplicator:observe] in code that may run earlier.
 
+	On the client, this includes pending predictions. [TemporaryPlayerReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@param player Player? -- required on the server, left out on the client
 	@return T
 ]=]
@@ -178,6 +181,9 @@ end
 
 	Returns the current value, yielding until it's available. Server values always exist, so this only yields on the
 	client.
+
+	On the client, this includes pending predictions. [TemporaryPlayerReplicator:getConfirmed] returns the server's value
+	without them.
 
 	@param player Player? -- required on the server, left out on the client
 	@return T
@@ -302,6 +308,9 @@ end
 	On the server, the change is sent to clients before `callback` runs, so anything it changes in response reaches
 	clients after the change that caused it.
 
+	On the client, this also fires when a prediction is made, and again if it's rolled back. Use
+	[TemporaryPlayerReplicator:onConfirmedChanged] to only hear about the server's changes.
+
 	@param callback (player: Player, newValue: T, oldValue: T) -> ()
 	@return Disconnect
 ]=]
@@ -336,6 +345,8 @@ end
 	end)
 	```
 
+	This includes predictions: it fires when a prediction is made, and again if it's rolled back.
+
 	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
@@ -357,6 +368,9 @@ end
 
 	Whole values (the first value, or a `set`) don't fire this; use
 	[TemporaryPlayerReplicator:onChanged] to see every change.
+
+	Patches always come from the server: predictions don't fire this, and `newValue` and `oldValue` are the
+	server's values.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -382,6 +396,8 @@ end
 	```lua
 	local coins = ReactObservableValue.useObservableValue(CurrencyNetwork.coinsReplicator:getObservable())
 	```
+
+	The observable includes pending predictions, like [TemporaryPlayerReplicator:get].
 
 	@return ObservableValue<T>
 ]=]

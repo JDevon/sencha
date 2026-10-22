@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Client prediction:
+  - `prediction` on replicators, and `fireServerPredicted` / `invokeServerPredicted` on reliable remotes.
+  - `get`, `getAsync`, `observe`, `onChanged` and `getObservable` include pending predictions on the client.
+  - `getConfirmed` and `onConfirmedChanged` on replicators, for the server's value without predictions.
+  - New exported type: `Sencha.Prediction`.
+
 ## 0.1.0
 
 - Initial release:

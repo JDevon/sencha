@@ -111,6 +111,9 @@ end
 	On the client, errors if the value hasn't arrived yet. Call [Sencha.waitForReplicators] while loading, or use
 	[SavedReplicator:getAsync] or [SavedReplicator:observe] in code that may run earlier.
 
+	On the client, this includes pending predictions. [SavedReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@param player Player? -- required on the server, left out on the client
 	@return T
 ]=]
@@ -138,6 +141,9 @@ end
 
 	Returns the current value, yielding until it's available. On the server, waits for the player's saved data to load.
 
+	On the client, this includes pending predictions. [SavedReplicator:getConfirmed] returns the server's value
+	without them.
+
 	@param player Player? -- required on the server, left out on the client
 	@return T
 ]=]
@@ -161,6 +167,9 @@ end
 
 	On the server, the change is sent to clients before `callback` runs, so anything it changes in response reaches
 	clients after the change that caused it.
+
+	On the client, this also fires when a prediction is made, and again if it's rolled back. Use
+	[SavedReplicator:onConfirmedChanged] to only hear about the server's changes.
 
 	@param callback (player: Player, newValue: T, oldValue: T) -> ()
 	@return Disconnect
@@ -192,6 +201,8 @@ end
 	end)
 	```
 
+	This includes predictions: it fires when a prediction is made, and again if it's rolled back.
+
 	@param callback (newValue: T, oldValue: T?) -> ()
 	@return Disconnect
 ]=]
@@ -209,6 +220,9 @@ end
 	config receive patches; calling this on one without errors.
 
 	The first value is a whole value, so it doesn't fire this; use [SavedReplicator:onChanged] to see every change.
+
+	Patches always come from the server: predictions don't fire this, and `newValue` and `oldValue` are the
+	server's values.
 
 	@param callback (newValue: T, oldValue: T, patch: P) -> ()
 	@return Disconnect
@@ -234,6 +248,8 @@ end
 	```lua
 	local research = ReactObservableValue.useObservableValue(ResearchNetwork.researchReplicator:getObservable())
 	```
+
+	The observable includes pending predictions, like [SavedReplicator:get].
 
 	@return ObservableValue<T>
 ]=]

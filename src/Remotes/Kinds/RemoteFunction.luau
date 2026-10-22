@@ -107,6 +107,9 @@ end
 	Calls the server's callback and returns what it returns, showing `predictions` on their replicators until the
 	server has handled this call. Build each prediction with a replicator's `prediction` method.
 
+	The server must make this call's replicator changes before its handler returns. See
+	[Client prediction](https://github.com/JDevon/sencha#client-prediction).
+
 	@param predictions { Prediction }
 	@param ... T...
 	@return R...

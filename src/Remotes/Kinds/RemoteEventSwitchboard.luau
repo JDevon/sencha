@@ -160,6 +160,9 @@ end
 	Sends the arguments to the server callback for `port`, and shows `predictions` on their replicators until the
 	server has handled this call. Build each prediction with a replicator's `prediction` method.
 
+	The server must make this call's replicator changes before its handler returns. See
+	[Client prediction](https://github.com/JDevon/sencha#client-prediction).
+
 	@param predictions { Prediction }
 	@param port string
 	@param ... T...
