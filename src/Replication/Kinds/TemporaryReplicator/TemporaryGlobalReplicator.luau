@@ -6,6 +6,7 @@ local ReplicationServer = require(script.Parent.Parent.Parent.ReplicationServer)
 local ReplicationShared = require(script.Parent.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.Parent.ReplicationClient.ClientReplicator)
+local PredictionsClient = require(script.Parent.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local noYielding = require(script.Parent.Parent.Parent.Parent.Util.noYielding)
@@ -78,6 +79,10 @@ export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 				self: TemporaryGlobalReplicator<T, P>,
 				callback: (newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
+			prediction: (
+				self: TemporaryGlobalReplicator<T, P>,
+				predict: ((value: T) -> T) | P
+			) -> PredictionsClient.PredictionRequest,
 			isLoaded: (self: TemporaryGlobalReplicator<T, P>) -> boolean,
 		},
 	}
@@ -389,6 +394,38 @@ function TemporaryGlobalReplicator.onConfirmedChanged<T, P>(
 	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
 		callback(newValue, oldValue)
 	end)
+end
+
+--[=[
+	@method prediction
+	@within TemporaryGlobalReplicator
+	@client
+
+	Builds a prediction for this replicator. The returned prediction can be used with a predicted remote call such as
+	`invokeServerPredicted` or `fireServerPredicted`. While the call is pending, [TemporaryGlobalReplicator:get],
+	[TemporaryGlobalReplicator:observe] and [TemporaryGlobalReplicator:onChanged] show the value with the prediction
+	applied; it's removed when the server confirms the call.
+
+	`predict` is either a function that returns the predicted value, or a patch on a replicator with an incremental
+	config. A patch is applied with the config's `apply`, the same way the server's patches are.
+
+	```lua
+	EventsNetwork.startMeteorShowerRemote:fireServerPredicted({
+		EventsNetwork.meteorShowerReplicator:prediction(function()
+			return true
+		end),
+	})
+	```
+
+	@param predict ((value: T) -> T) | P
+	@return Prediction
+]=]
+function TemporaryGlobalReplicator.prediction<T, P>(
+	self: TemporaryGlobalReplicator<T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	assert(RunService:IsClient(), `TemporaryGlobalReplicator:prediction can only be called on the client`)
+	return getClientReplicator(self):prediction(predict)
 end
 
 --[=[

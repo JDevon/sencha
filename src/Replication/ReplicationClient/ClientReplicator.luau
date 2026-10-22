@@ -1,5 +1,6 @@
 local ReplicationClient = require(script.Parent)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.ObservableValue)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
@@ -25,6 +26,7 @@ export type ClientReplicator<T, P> = typeof(setmetatable(
 				ClientReplicator<T, P>,
 				callback: (newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
+			prediction: (ClientReplicator<T, P>, predict: ((value: T) -> T) | P) -> PredictionsClient.PredictionRequest,
 			isLoaded: (ClientReplicator<T, P>) -> boolean,
 		},
 	}
@@ -32,12 +34,6 @@ export type ClientReplicator<T, P> = typeof(setmetatable(
 
 local ClientReplicator = {}
 ClientReplicator.__index = ClientReplicator
-
-function ClientReplicator.new<T, P>(channel: ReplicatorChannel.ReplicatorChannel<T, P>)
-	local self = setmetatable({}, ClientReplicator)
-	self.channel = channel
-	return self
-end
 
 local function assertLoaded<T, P>(self: ClientReplicator<T, P>, method: string)
 	if self.channel.loaded:get() then
@@ -58,6 +54,12 @@ local function assertLoaded<T, P>(self: ClientReplicator<T, P>, method: string)
 			3
 		)
 	end
+end
+
+function ClientReplicator.new<T, P>(channel: ReplicatorChannel.ReplicatorChannel<T, P>)
+	local self = setmetatable({}, ClientReplicator)
+	self.channel = channel
+	return self
 end
 
 function ClientReplicator.get<T, P>(self: ClientReplicator<T, P>): T
@@ -155,6 +157,13 @@ function ClientReplicator.onConfirmedChanged<T, P>(
 			callback(newValue, oldValue)
 		end
 	end)
+end
+
+function ClientReplicator.prediction<T, P>(
+	self: ClientReplicator<T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	return { channel = self.channel, predict = predict }
 end
 
 function ClientReplicator.isLoaded<T, P>(self: ClientReplicator<T, P>): boolean

@@ -7,6 +7,7 @@ local ReplicationServer = require(script.Parent.Parent.Parent.ReplicationServer)
 local ReplicationShared = require(script.Parent.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.Parent.ReplicationClient.ClientReplicator)
+local PredictionsClient = require(script.Parent.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local noYielding = require(script.Parent.Parent.Parent.Parent.Util.noYielding)
@@ -97,6 +98,10 @@ export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 				self: TemporaryPlayerReplicator<T, P>,
 				callback: (player: Player, newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
+			prediction: (
+				self: TemporaryPlayerReplicator<T, P>,
+				predict: ((value: T) -> T) | P
+			) -> PredictionsClient.PredictionRequest,
 			isLoaded: (self: TemporaryPlayerReplicator<T, P>) -> boolean,
 		},
 	}
@@ -433,6 +438,38 @@ function TemporaryPlayerReplicator.onConfirmedChanged<T, P>(
 	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
 		callback(Players.LocalPlayer, newValue, oldValue)
 	end)
+end
+
+--[=[
+	@method prediction
+	@within TemporaryPlayerReplicator
+	@client
+
+	Builds a prediction for this replicator. The returned prediction can be used with a predicted remote call such as
+	`invokeServerPredicted` or `fireServerPredicted`. While the call is pending, [TemporaryPlayerReplicator:get],
+	[TemporaryPlayerReplicator:observe] and [TemporaryPlayerReplicator:onChanged] show the value with the prediction
+	applied; it's removed when the server confirms the call.
+
+	`predict` is either a function that returns the predicted value, or a patch on a replicator with an incremental
+	config. A patch is applied with the config's `apply`, the same way the server's patches are.
+
+	```lua
+	CurrencyNetwork.buyItemRemote:invokeServerPredicted({
+		CurrencyNetwork.coinsReplicator:prediction(function(coins)
+			return coins - 10
+		end),
+	}, "sword")
+	```
+
+	@param predict ((value: T) -> T) | P
+	@return Prediction
+]=]
+function TemporaryPlayerReplicator.prediction<T, P>(
+	self: TemporaryPlayerReplicator<T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	assert(RunService:IsClient(), `TemporaryPlayerReplicator:prediction can only be called on the client`)
+	return getClientReplicator(self):prediction(predict)
 end
 
 --[=[

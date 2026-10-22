@@ -5,6 +5,7 @@ local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.Parent.ObservableValue)
 local ClientReplicator = require(script.Parent.Parent.ReplicationClient.ClientReplicator)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 local ReplicatorChannel = require(script.Parent.Parent.ReplicationShared.ChannelRegistry.ReplicatorChannel)
 
 local toDisconnect = require(script.Parent.Parent.Parent.Util.toDisconnect)
@@ -68,6 +69,10 @@ export type SavedReplicator<D, T, P> = typeof(setmetatable(
 				self: SavedReplicator<D, T, P>,
 				callback: (player: Player, newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
+			prediction: (
+				self: SavedReplicator<D, T, P>,
+				predict: ((value: T) -> T) | P
+			) -> PredictionsClient.PredictionRequest,
 			isLoaded: (self: SavedReplicator<D, T, P>) -> boolean,
 		},
 	}
@@ -281,6 +286,40 @@ function SavedReplicator.onConfirmedChanged<D, T, P>(
 	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
 		callback(Players.LocalPlayer, newValue, oldValue)
 	end)
+end
+
+--[=[
+	@method prediction
+	@within SavedReplicator
+	@client
+
+	Builds a prediction for this replicator. The returned prediction can be used with a predicted remote call such as
+	`invokeServerPredicted` or `fireServerPredicted`. While the call is pending, [SavedReplicator:get],
+	[SavedReplicator:observe] and [SavedReplicator:onChanged] show the value with the prediction applied; it's removed
+	when the server confirms the call.
+
+	`predict` is either a function that returns the predicted value, or a patch on a replicator with an incremental
+	config. A patch is applied with the config's `apply`, the same way the server's patches are.
+
+	```lua
+	ResearchNetwork.researchRemote:invokeServerPredicted({
+		ResearchNetwork.researchReplicator:prediction(function(research)
+			local newResearch = table.clone(research)
+			table.insert(newResearch, "drills")
+			return newResearch
+		end),
+	}, "drills")
+	```
+
+	@param predict ((value: T) -> T) | P
+	@return Prediction
+]=]
+function SavedReplicator.prediction<D, T, P>(
+	self: SavedReplicator<D, T, P>,
+	predict: ((value: T) -> T) | P
+): PredictionsClient.PredictionRequest
+	assert(RunService:IsClient(), `SavedReplicator:prediction can only be called on the client`)
+	return getClientReplicator(self):prediction(predict)
 end
 
 --[=[
