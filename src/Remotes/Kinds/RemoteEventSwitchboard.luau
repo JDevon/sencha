@@ -6,6 +6,7 @@ local Cleanup = require(script.Parent.Parent.Parent.Util.Cleanup)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 
 --[=[
 	@class EventSwitchboard
@@ -39,6 +40,12 @@ export type RemoteEventSwitchboard<T...> = typeof(setmetatable(
 		__index: {
 			connect: (self: RemoteEventSwitchboard<T...>, port: string, callback: (Player, T...) -> ()) -> () -> (),
 			fireServer: (self: RemoteEventSwitchboard<T...>, port: string, T...) -> (),
+			fireServerPredicted: (
+				self: RemoteEventSwitchboard<T...>,
+				predictions: { PredictionsClient.PredictionRequest },
+				port: string,
+				T...
+			) -> (),
 			rateLimit: (self: RemoteEventSwitchboard<T...>, limit: RateLimiter.Limit) -> RemoteEventSwitchboard<T...>,
 			destroy: (self: RemoteEventSwitchboard<T...>) -> (),
 		},
@@ -143,6 +150,34 @@ end
 function RemoteEventSwitchboard.fireServer<T...>(self: RemoteEventSwitchboard<T...>, port: string, ...: T...)
 	assert(RunService:IsClient(), "RemoteEventSwitchboard.fireServer can only be called from the client")
 	return self.remote.loader:assertInstance():FireServer(false, port, self.remote.typechecker:check(...))
+end
+
+--[=[
+	@method fireServerPredicted
+	@within EventSwitchboard
+	@client
+
+	Sends the arguments to the server callback for `port`, and shows `predictions` on their replicators until the
+	server has handled this call. Build each prediction with a replicator's `prediction` method.
+
+	@param predictions { Prediction }
+	@param port string
+	@param ... T...
+]=]
+function RemoteEventSwitchboard.fireServerPredicted<T...>(
+	self: RemoteEventSwitchboard<T...>,
+	predictions: { PredictionsClient.PredictionRequest },
+	port: string,
+	...: T...
+)
+	assert(RunService:IsClient(), "RemoteEventSwitchboard.fireServerPredicted can only be called from the client")
+	if #predictions == 0 then
+		error("fireServerPredicted needs at least one prediction", 2)
+	end
+
+	local args = table.pack(self.remote.typechecker:check(...))
+	local id = PredictionsClient.beginPrediction(predictions)
+	self.remote.loader:assertInstance():FireServer(id, port, table.unpack(args, 1, args.n))
 end
 
 --[=[

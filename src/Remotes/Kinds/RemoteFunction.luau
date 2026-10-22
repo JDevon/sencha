@@ -8,6 +8,7 @@ local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local RemoteTypechecker = require(script.Parent.Parent.RemoteTypechecker)
 local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 
 --[=[
 	@class Function
@@ -33,6 +34,11 @@ export type Function<T..., R...> = typeof(setmetatable(
 	{} :: {
 		__index: {
 			invokeServer: (Function<T..., R...>, T...) -> R...,
+			invokeServerPredicted: (
+				Function<T..., R...>,
+				predictions: { PredictionsClient.PredictionRequest },
+				T...
+			) -> R...,
 			onServerInvoke: (Function<T..., R...>, (Player, T...) -> R...) -> (),
 			rateLimit: (Function<T..., R...>, RateLimiter.Limit) -> Function<T..., R...>,
 			destroy: (Function<T..., R...>) -> (),
@@ -90,6 +96,41 @@ end
 function RemoteFunction.invokeServer<T..., R...>(self: Function<T..., R...>, ...: T...): R...
 	assert(RunService:IsClient(), "RemoteFunction.invokeServer can only be called from the client")
 	return self.retTypechecker:check(self.loader:assertInstance():InvokeServer(false, self.argTypechecker:check(...)))
+end
+
+--[=[
+	@method invokeServerPredicted
+	@within Function
+	@client
+	@yields
+
+	Calls the server's callback and returns what it returns, showing `predictions` on their replicators until the
+	server has handled this call. Build each prediction with a replicator's `prediction` method.
+
+	@param predictions { Prediction }
+	@param ... T...
+	@return R...
+]=]
+function RemoteFunction.invokeServerPredicted<T..., R...>(
+	self: Function<T..., R...>,
+	predictions: { PredictionsClient.PredictionRequest },
+	...: T...
+): R...
+	assert(RunService:IsClient(), "RemoteFunction.invokeServerPredicted can only be called from the client")
+	if #predictions == 0 then
+		error("invokeServerPredicted needs at least one prediction", 2)
+	end
+
+	local args = table.pack(self.argTypechecker:check(...))
+	local id = PredictionsClient.beginPrediction(predictions)
+	local instance = self.loader:assertInstance()
+	local results = table.pack(pcall(instance.InvokeServer, instance, id, table.unpack(args, 1, args.n)))
+	if not results[1] then
+		PredictionsClient.settle(id)
+		error(results[2], 0)
+	end
+
+	return self.retTypechecker:check(table.unpack(results, 2, results.n))
 end
 
 --[=[

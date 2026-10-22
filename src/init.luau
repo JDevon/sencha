@@ -16,6 +16,8 @@ local TemporaryReplicator = require(script.Replication.Kinds.TemporaryReplicator
 local TemporaryPlayerReplicator = require(script.Replication.Kinds.TemporaryReplicator.TemporaryPlayerReplicator)
 local TemporaryGlobalReplicator = require(script.Replication.Kinds.TemporaryReplicator.TemporaryGlobalReplicator)
 
+local PredictionsClient = require(script.Predictions.PredictionsClient)
+
 local toDisconnect = require(script.Util.toDisconnect)
 
 --[=[
@@ -26,6 +28,19 @@ local toDisconnect = require(script.Util.toDisconnect)
 	more than once, and can be handed to a cleanup library or returned from a React effect.
 ]=]
 export type Disconnect = toDisconnect.Disconnect
+
+--[=[
+	@type Prediction { channel: any, predict: any }
+	@within Sencha
+
+	A prediction for one replicator, built with that replicator's `prediction` method and passed to a predicted remote
+	call such as `invokeServerPredicted` or `fireServerPredicted`.
+
+	`channel` is typed `any` to work around a limitation in Luau's older type checker. Predictions are still
+	type-checked when you create them. Each replicator's `prediction` method checks its function or patch against that
+	replicator's value type.
+]=]
+export type Prediction = PredictionsClient.PredictionRequest
 
 --[=[
 	@interface Limit

@@ -5,6 +5,7 @@ local RateLimiter = require(script.Parent.Parent.RateLimiter)
 local DefineHooks = require(script.Parent.Parent.Parent.Util.DefineHooks)
 local PredictionsServer = require(script.Parent.Parent.Parent.Predictions.PredictionsServer)
 local PredictionsShared = require(script.Parent.Parent.Parent.Predictions.PredictionsShared)
+local PredictionsClient = require(script.Parent.Parent.Parent.Predictions.PredictionsClient)
 
 --[=[
 	@class FunctionSwitchboard
@@ -41,6 +42,12 @@ export type RemoteFnSwitchboard<T..., R...> = typeof(setmetatable(
 				callback: (Player, T...) -> R...
 			) -> () -> (),
 			invokeServer: (self: RemoteFnSwitchboard<T..., R...>, port: string, T...) -> R...,
+			invokeServerPredicted: (
+				self: RemoteFnSwitchboard<T..., R...>,
+				predictions: { PredictionsClient.PredictionRequest },
+				port: string,
+				T...
+			) -> R...,
 			rateLimit: (
 				self: RemoteFnSwitchboard<T..., R...>,
 				limit: RateLimiter.Limit
@@ -152,6 +159,43 @@ function RemoteFnSwitchboard.invokeServer<T..., R...>(self: RemoteFnSwitchboard<
 	return self.remote.retTypechecker:check(
 		self.remote.loader:assertInstance():InvokeServer(false, port, self.remote.argTypechecker:check(...))
 	)
+end
+
+--[=[
+	@method invokeServerPredicted
+	@within FunctionSwitchboard
+	@client
+	@yields
+
+	Calls the server callback for `port` and returns what it returns, showing `predictions` on their replicators until
+	the server has handled this call. Build each prediction with a replicator's `prediction` method.
+
+	@param predictions { Prediction }
+	@param port string
+	@param ... T...
+	@return R...
+]=]
+function RemoteFnSwitchboard.invokeServerPredicted<T..., R...>(
+	self: RemoteFnSwitchboard<T..., R...>,
+	predictions: { PredictionsClient.PredictionRequest },
+	port: string,
+	...: T...
+): R...
+	assert(RunService:IsClient(), "RemoteFnSwitchboard.invokeServerPredicted can only be called from the client")
+	if #predictions == 0 then
+		error("invokeServerPredicted needs at least one prediction", 2)
+	end
+
+	local args = table.pack(self.remote.argTypechecker:check(...))
+	local id = PredictionsClient.beginPrediction(predictions)
+	local instance = self.remote.loader:assertInstance()
+	local results = table.pack(pcall(instance.InvokeServer, instance, id, port, table.unpack(args, 1, args.n)))
+	if not results[1] then
+		PredictionsClient.settle(id)
+		error(results[2], 0)
+	end
+
+	return self.remote.retTypechecker:check(table.unpack(results, 2, results.n))
 end
 
 --[=[
