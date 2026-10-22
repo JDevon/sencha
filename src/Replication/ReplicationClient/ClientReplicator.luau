@@ -20,6 +20,11 @@ export type ClientReplicator<T, P> = typeof(setmetatable(
 				callback: (newValue: T, oldValue: T, patch: P) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (ClientReplicator<T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (ClientReplicator<T, P>) -> T,
+			onConfirmedChanged: (
+				ClientReplicator<T, P>,
+				callback: (newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
 			isLoaded: (ClientReplicator<T, P>) -> boolean,
 		},
 	}
@@ -57,7 +62,7 @@ end
 
 function ClientReplicator.get<T, P>(self: ClientReplicator<T, P>): T
 	assertLoaded(self, "get")
-	return self.channel.observable:get()
+	return self.channel.shown:get()
 end
 
 function ClientReplicator.getAsync<T, P>(self: ClientReplicator<T, P>): T
@@ -77,17 +82,17 @@ function ClientReplicator.getAsync<T, P>(self: ClientReplicator<T, P>): T
 			:expect()
 		task.cancel(warnThread)
 	end
-	return self.channel.observable:get()
+	return self.channel.shown:get()
 end
 
 -- fires immediately if loaded (otherwise once loaded), then on every change. oldValue is nil for the first call
 function ClientReplicator.observe<T, P>(self: ClientReplicator<T, P>, callback: (newValue: T, oldValue: T?) -> ())
 	local isLoaded = self.channel.loaded:get()
-	local lastValue: T? = if isLoaded then self.channel.observable:get() else nil
+	local lastValue: T? = if isLoaded then self.channel.shown:get() else nil
 
 	-- onSet rather than onChanged.
 	-- A first value of nil isn't a change from the nil starting value, but still needs a first call
-	local disconnect = self.channel.observable:onSet(function(value)
+	local disconnect = self.channel.shown:onSet(function(value)
 		local oldValue = lastValue
 		lastValue = value
 		callback(value, oldValue)
@@ -100,7 +105,7 @@ end
 
 -- fires on changes after the initial value
 function ClientReplicator.onChanged<T, P>(self: ClientReplicator<T, P>, callback: (newValue: T, oldValue: T) -> ())
-	return self.channel.observable:onChanged(function(newValue, oldValue)
+	return self.channel.shown:onChanged(function(newValue, oldValue)
 		-- the initial load sets the value while loaded is still false
 		if self.channel.loaded:get() then
 			callback(newValue, oldValue)
@@ -126,12 +131,30 @@ function ClientReplicator.getObservable<T, P>(self: ClientReplicator<T, P>): Obs
 		return observable
 	end
 
-	local newObservable = ObservableValue.new(self.channel.observable:get())
-	self.channel.observable:onSet(function(value)
+	local newObservable = ObservableValue.new(self.channel.shown:get())
+	self.channel.shown:onSet(function(value)
 		newObservable:set(value)
 	end)
 	self.observable = newObservable
 	return newObservable
+end
+
+-- the value the server sent, without predictions
+function ClientReplicator.getConfirmed<T, P>(self: ClientReplicator<T, P>): T
+	assertLoaded(self, "getConfirmed")
+	return self.channel.confirmed:get()
+end
+
+-- fires when the server's value changes, not for predictions or the initial value
+function ClientReplicator.onConfirmedChanged<T, P>(
+	self: ClientReplicator<T, P>,
+	callback: (newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	return self.channel.confirmed:onChanged(function(newValue, oldValue)
+		if self.channel.loaded:get() then
+			callback(newValue, oldValue)
+		end
+	end)
 end
 
 function ClientReplicator.isLoaded<T, P>(self: ClientReplicator<T, P>): boolean

@@ -63,6 +63,11 @@ export type SavedReplicator<D, T, P> = typeof(setmetatable(
 				callback: (newValue: T, oldValue: T, patch: P) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (self: SavedReplicator<D, T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (self: SavedReplicator<D, T, P>) -> T,
+			onConfirmedChanged: (
+				self: SavedReplicator<D, T, P>,
+				callback: (player: Player, newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
 			isLoaded: (self: SavedReplicator<D, T, P>) -> boolean,
 		},
 	}
@@ -230,6 +235,52 @@ end
 function SavedReplicator.getObservable<D, T, P>(self: SavedReplicator<D, T, P>): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `SavedReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
+end
+
+--[=[
+	@method getConfirmed
+	@within SavedReplicator
+	@client
+
+	Returns the value the server sent, without any pending predictions. [SavedReplicator:get] returns the predicted
+	value while a prediction is pending; use this when code must only act on what the server has confirmed. Errors if
+	the value hasn't arrived yet.
+
+	@return T
+]=]
+function SavedReplicator.getConfirmed<D, T, P>(self: SavedReplicator<D, T, P>): T
+	assert(RunService:IsClient(), `SavedReplicator:getConfirmed can only be called on the client`)
+	return getClientReplicator(self):getConfirmed()
+end
+
+--[=[
+	@method onConfirmedChanged
+	@within SavedReplicator
+	@client
+
+	Calls `callback` when the server's value changes, not for predictions or the initial value. `player` is always the
+	local player.
+
+	[SavedReplicator:onChanged] also fires for predictions, and again if a wrong prediction is rolled back. Use this
+	instead for effects that should only change for confirmed values:
+
+	```lua
+	ResearchNetwork.researchReplicator:onConfirmedChanged(function(_player, research, oldResearch)
+		print(`the server confirmed {#research} researched items`)
+	end)
+	```
+
+	@param callback (player: Player, newValue: T, oldValue: T) -> ()
+	@return Disconnect
+]=]
+function SavedReplicator.onConfirmedChanged<D, T, P>(
+	self: SavedReplicator<D, T, P>,
+	callback: (player: Player, newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	assert(RunService:IsClient(), `SavedReplicator:onConfirmedChanged can only be called on the client`)
+	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
+		callback(Players.LocalPlayer, newValue, oldValue)
+	end)
 end
 
 --[=[

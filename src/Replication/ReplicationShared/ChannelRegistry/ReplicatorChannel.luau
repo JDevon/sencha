@@ -27,7 +27,10 @@ export type ReplicatorChannel<T, P> = typeof(setmetatable(
 		incrementalConfig: ReplicationShared.IncrementalConfig<T, P>?,
 		read: ChannelUtil.ChannelRead<T>,
 		loaded: ObservableValue.ObservableValue<boolean>,
-		observable: ObservableValue.ObservableValue<T>,
+		confirmed: ObservableValue.ObservableValue<T>,
+		shown: ObservableValue.ObservableValue<T>,
+		predictions: { ChannelUtil.Prediction },
+		hadPredictions: boolean,
 		updateReceivedSignal: Signal.Signal<T, T, P>,
 	},
 	ReplicatorChannel
@@ -44,9 +47,13 @@ function ReplicatorChannel.new<T, P>(config: ReplicatorChannelConfig<T, P>): Rep
 	self.patchTypechecker = if config.incrementalConfig then gt.build(config.incrementalConfig.patchType) else nil
 
 	self.read = ChannelUtil.guardConfiguredRead(config.read)
-
 	self.loaded = ObservableValue.new(false)
-	self.observable = ObservableValue.new(nil :: any)
+
+	self.confirmed = ObservableValue.new(nil :: any)
+	self.shown = ObservableValue.new(nil :: any)
+	self.predictions = {}
+	self.hadPredictions = false
+
 	self.updateReceivedSignal = Signal.new()
 	return self :: any
 end
@@ -78,7 +85,8 @@ function ReplicatorChannel.receive<T, P>(self: ReplicatorChannel<T, P>, value: a
 	end
 
 	ChannelUtil.freezeInPlace(value)
-	self.observable:set(value)
+	self.confirmed:set(value)
+	self:reconcilePredictions()
 	self.loaded:set(true)
 	return true
 end
@@ -95,7 +103,7 @@ function ReplicatorChannel.receiveUpdate<T, P>(self: ReplicatorChannel<T, P>, up
 		return false
 	end
 
-	local oldValue = self.observable:get()
+	local oldValue = self.confirmed:get()
 	local newValue, patchFailure = self:applyPatch(oldValue, update)
 	if not newValue then
 		-- a bad patch here means the server and client disagree. Failures.report doesn't stop this thread, so the
@@ -105,7 +113,8 @@ function ReplicatorChannel.receiveUpdate<T, P>(self: ReplicatorChannel<T, P>, up
 	end
 
 	ChannelUtil.freezeInPlace(update)
-	self.observable:set(newValue)
+	self.confirmed:set(newValue)
+	self:reconcilePredictions()
 	self.updateReceivedSignal:Fire(newValue, oldValue, update)
 	return true
 end
@@ -132,6 +141,56 @@ function ReplicatorChannel.applyPatch<T, P>(self: ReplicatorChannel<T, P>, oldVa
 
 	ChannelUtil.freezeInPlace(newValue)
 	return newValue
+end
+
+function ReplicatorChannel.addPrediction<T, P>(self: ReplicatorChannel<T, P>, prediction: ChannelUtil.Prediction)
+	table.insert(self.predictions, prediction)
+end
+
+function ReplicatorChannel.removePrediction<T, P>(self: ReplicatorChannel<T, P>, id: number)
+	for index, prediction in self.predictions do
+		if prediction.id == id then
+			table.remove(self.predictions, index)
+			return
+		end
+	end
+end
+
+function ReplicatorChannel.reconcilePredictions<T, P>(self: ReplicatorChannel<T, P>)
+	local confirmed = self.confirmed:get()
+
+	if #self.predictions == 0 and not self.hadPredictions then
+		self.shown:set(confirmed)
+		return
+	end
+
+	local shownValue = confirmed
+	local kept = {}
+	for _, prediction in self.predictions do
+		local ok, result = ChannelUtil.applyPrediction(self.incrementalConfig, shownValue, prediction)
+		if ok and RunService:IsStudio() then
+			local matches, cause = self.typechecker:matches(result)
+			if not matches then
+				Failures.report(
+					`A prediction on replicator {self.key} produced a value that doesn't match its type:\n{cause:formatErr()}`
+				)
+				ok = false
+			end
+		end
+
+		if ok then
+			ChannelUtil.freezeInPlace(result)
+			shownValue = result
+			table.insert(kept, prediction)
+		end
+	end
+
+	self.predictions = kept
+	self.hadPredictions = #kept > 0
+
+	if not ChannelUtil.deepEqual(shownValue, self.shown:get()) then
+		self.shown:set(shownValue)
+	end
 end
 
 return table.freeze({

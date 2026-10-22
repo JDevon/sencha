@@ -92,6 +92,11 @@ export type TemporaryPlayerReplicator<T, P> = typeof(setmetatable(
 				callback: (player: Player, newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (self: TemporaryPlayerReplicator<T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (self: TemporaryPlayerReplicator<T, P>) -> T,
+			onConfirmedChanged: (
+				self: TemporaryPlayerReplicator<T, P>,
+				callback: (player: Player, newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
 			isLoaded: (self: TemporaryPlayerReplicator<T, P>) -> boolean,
 		},
 	}
@@ -380,6 +385,54 @@ function TemporaryPlayerReplicator.getObservable<T, P>(
 ): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `TemporaryPlayerReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
+end
+
+--[=[
+	@method getConfirmed
+	@within TemporaryPlayerReplicator
+	@client
+
+	Returns the value the server sent, without any pending predictions. [TemporaryPlayerReplicator:get] returns the
+	predicted value while a prediction is pending; use this when code must only act on what the server has confirmed.
+	Errors if the value hasn't arrived yet.
+
+	@return T
+]=]
+function TemporaryPlayerReplicator.getConfirmed<T, P>(self: TemporaryPlayerReplicator<T, P>): T
+	assert(RunService:IsClient(), `TemporaryPlayerReplicator:getConfirmed can only be called on the client`)
+	return getClientReplicator(self):getConfirmed()
+end
+
+--[=[
+	@method onConfirmedChanged
+	@within TemporaryPlayerReplicator
+	@client
+
+	Calls `callback` when the server's value changes, not for predictions or the initial value. `player` is always the
+	local player.
+
+	[TemporaryPlayerReplicator:onChanged] also fires for predictions, and again if a wrong prediction is rolled back.
+	Use this instead for effects that should only change for confirmed values:
+
+	```lua
+	CurrencyNetwork.coinsReplicator:onConfirmedChanged(function(_player, coins, oldCoins)
+		if coins > oldCoins then
+			playCoinsGainedSound() -- never plays for a prediction that gets rolled back
+		end
+	end)
+	```
+
+	@param callback (player: Player, newValue: T, oldValue: T) -> ()
+	@return Disconnect
+]=]
+function TemporaryPlayerReplicator.onConfirmedChanged<T, P>(
+	self: TemporaryPlayerReplicator<T, P>,
+	callback: (player: Player, newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	assert(RunService:IsClient(), `TemporaryPlayerReplicator:onConfirmedChanged can only be called on the client`)
+	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
+		callback(Players.LocalPlayer, newValue, oldValue)
+	end)
 end
 
 --[=[

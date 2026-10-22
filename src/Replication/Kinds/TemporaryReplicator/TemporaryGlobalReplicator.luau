@@ -73,6 +73,11 @@ export type TemporaryGlobalReplicator<T, P> = typeof(setmetatable(
 				callback: (newValue: T, oldValue: T) -> ()
 			) -> toDisconnect.Disconnect,
 			getObservable: (self: TemporaryGlobalReplicator<T, P>) -> ObservableValue.ObservableValue<T>,
+			getConfirmed: (self: TemporaryGlobalReplicator<T, P>) -> T,
+			onConfirmedChanged: (
+				self: TemporaryGlobalReplicator<T, P>,
+				callback: (newValue: T, oldValue: T) -> ()
+			) -> toDisconnect.Disconnect,
 			isLoaded: (self: TemporaryGlobalReplicator<T, P>) -> boolean,
 		},
 	}
@@ -337,6 +342,53 @@ function TemporaryGlobalReplicator.getObservable<T, P>(
 ): ObservableValue.ObservableValue<T>
 	assert(RunService:IsClient(), `TemporaryGlobalReplicator:getObservable can only be called on the client`)
 	return getClientReplicator(self):getObservable()
+end
+
+--[=[
+	@method getConfirmed
+	@within TemporaryGlobalReplicator
+	@client
+
+	Returns the value the server sent, without any pending predictions. [TemporaryGlobalReplicator:get] returns the
+	predicted value while a prediction is pending; use this when code must only act on what the server has confirmed.
+	Errors if the value hasn't arrived yet.
+
+	@return T
+]=]
+function TemporaryGlobalReplicator.getConfirmed<T, P>(self: TemporaryGlobalReplicator<T, P>): T
+	assert(RunService:IsClient(), `TemporaryGlobalReplicator:getConfirmed can only be called on the client`)
+	return getClientReplicator(self):getConfirmed()
+end
+
+--[=[
+	@method onConfirmedChanged
+	@within TemporaryGlobalReplicator
+	@client
+
+	Calls `callback` when the server's value changes, not for predictions or the initial value.
+
+	[TemporaryGlobalReplicator:onChanged] also fires for predictions, and again if a wrong prediction is rolled back.
+	Use this instead for effects that should only change for confirmed values:
+
+	```lua
+	EventsNetwork.meteorShowerReplicator:onConfirmedChanged(function(isActive, wasActive)
+		if isActive and not wasActive then
+			announceMeteorShower()
+		end
+	end)
+	```
+
+	@param callback (newValue: T, oldValue: T) -> ()
+	@return Disconnect
+]=]
+function TemporaryGlobalReplicator.onConfirmedChanged<T, P>(
+	self: TemporaryGlobalReplicator<T, P>,
+	callback: (newValue: T, oldValue: T) -> ()
+): toDisconnect.Disconnect
+	assert(RunService:IsClient(), `TemporaryGlobalReplicator:onConfirmedChanged can only be called on the client`)
+	return getClientReplicator(self):onConfirmedChanged(function(newValue, oldValue)
+		callback(newValue, oldValue)
+	end)
 end
 
 --[=[
