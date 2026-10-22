@@ -1,6 +1,7 @@
 local RunService = game:GetService("RunService")
 
 local ChannelUtil = require(script.Parent.ChannelUtil)
+local ChannelBatch = require(script.Parent.ChannelBatch)
 local ReplicationShared = require(script.Parent.Parent)
 local gt = require(script.Parent.Parent.Parent.Parent.Parent.GreenTea)
 local Signal = require(script.Parent.Parent.Parent.Parent.Parent.Signal)
@@ -157,8 +158,16 @@ function ReplicatorChannel.removePrediction<T, P>(self: ReplicatorChannel<T, P>,
 end
 
 function ReplicatorChannel.reconcilePredictions<T, P>(self: ReplicatorChannel<T, P>): { number }
-	local confirmed = self.confirmed:get()
 	local dropped = {}
+
+	-- the batch reconciles once at the end. A first value isn't deferred: nothing can be predicted before it, and
+	-- shown must be set before anything waiting on loaded reads it
+	if ChannelBatch.isBatching() and self.loaded:get() then
+		ChannelBatch.defer(self)
+		return dropped
+	end
+
+	local confirmed = self.confirmed:get()
 
 	if #self.predictions == 0 and not self.hadPredictions then
 		self.shown:set(confirmed)

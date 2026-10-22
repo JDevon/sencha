@@ -5,7 +5,9 @@ local DefineHooks = require(script.Parent.Parent.Util.DefineHooks)
 local ReplicationShared = require(script.Parent.ReplicationShared)
 local ObservableValue = require(script.Parent.Parent.Parent.ObservableValue)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
+local PredictionsClient = require(script.Parent.Parent.Predictions.PredictionsClient)
 local ReplicationRemotes = require(script.Parent.ReplicationShared.ReplicationRemotes)
+local ChannelBatch = require(script.Parent.ReplicationShared.ChannelRegistry.ChannelBatch)
 
 local FETCH_RETRY_SECONDS = 0.5
 local SLOW_LOAD_WARNING_SECONDS = 5
@@ -96,10 +98,7 @@ end
 function ReplicationClient._receiveFromStream(id: number, payload: ReplicationShared.StreamPayload, key: string?)
 	-- a batch isn't for one replicator, so it's handled before the id lookup (it arrives on id 0)
 	if payload.kind == "batch" then
-		local batch = payload :: ReplicationShared.BatchPayload
-		for _, message in batch.messages do
-			ReplicationClient._receiveFromStream(message.id, message.payload, message.key)
-		end
+		ReplicationClient._receiveBatch(payload :: ReplicationShared.BatchPayload)
 	else
 		if key then
 			channelKeys[id] = key
@@ -112,6 +111,30 @@ function ReplicationClient._receiveFromStream(id: number, payload: ReplicationSh
 		end
 
 		ReplicationClient._receive(resolvedKey, payload :: ReplicationShared.ReplicatorPayload)
+	end
+end
+
+function ReplicationClient._receiveBatch(batch: ReplicationShared.BatchPayload)
+	ChannelBatch.begin()
+
+	local ok, err = pcall(function()
+		for _, message in batch.messages do
+			ReplicationClient._receiveFromStream(message.id, message.payload, message.key)
+		end
+
+		local settledId = batch.ack or batch.cancel
+		if settledId then
+			PredictionsClient.settle(settledId)
+		end
+	end)
+
+	local deferredChannels = ChannelBatch.finish()
+	for _, channel in deferredChannels do
+		channel:reconcilePredictions()
+	end
+
+	if not ok then
+		error(err, 0)
 	end
 end
 

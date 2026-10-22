@@ -54,14 +54,14 @@ function PredictionsClient.beginPrediction(requests: { PredictionRequest }): num
 						.. ` Replicators: {table.concat(keys, ", ")}`
 				)
 			end
-			PredictionsClient.settle(id, true)
+			PredictionsClient.settle(id)
 		end),
 	}
 
 	return id
 end
 
-function PredictionsClient.settle(id: number, reconcile: boolean)
+function PredictionsClient.settle(id: number)
 	local entry = pending[id]
 	if not entry then
 		return
@@ -74,9 +74,7 @@ function PredictionsClient.settle(id: number, reconcile: boolean)
 
 	for _, channel in entry.channels do
 		channel:removePrediction(id)
-		if reconcile then
-			channel:reconcilePredictions()
-		end
+		channel:reconcilePredictions()
 	end
 end
 
