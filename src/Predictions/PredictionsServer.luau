@@ -2,9 +2,9 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Failures = require(script.Parent.Parent.Util.Failures)
+local ReplicationShared = require(script.Parent.Parent.Replication.ReplicationShared)
 
-export type HeldMessage = { id: number, payload: any, key: string? }
-type ActivePrediction = { id: number, held: { HeldMessage }, isHolding: boolean, escapeThread: thread }
+type ActivePrediction = { id: number, held: { ReplicationShared.HeldMessage }, isHolding: boolean, escapeThread: thread }
 
 local MAX_PREDICTION_WAIT = 2
 
@@ -68,7 +68,7 @@ function PredictionsServer.finishPrediction(player: Player, id: number)
 	end
 end
 
-function PredictionsServer.holdMessage(player: Player, message: HeldMessage)
+function PredictionsServer.holdMessage(player: Player, message: ReplicationShared.HeldMessage)
 	local activePlayerPrediction = activePredictions[player]
 	if not (activePlayerPrediction and activePlayerPrediction.isHolding) then
 		return false
@@ -85,7 +85,12 @@ function PredictionsServer.tryAcknowledgeRejected(player: Player, id: (number | 
 end
 
 -- private
-function PredictionsServer._sendBatch(player: Player, messages: { HeldMessage }, ack: number?, cancel: number?)
+function PredictionsServer._sendBatch(
+	player: Player,
+	messages: { ReplicationShared.HeldMessage },
+	ack: number?,
+	cancel: number?
+)
 	assert(sendStream, "PredictionsServer has no stream sender yet")(player, 0, {
 		kind = "batch",
 		messages = messages,

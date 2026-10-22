@@ -7,6 +7,7 @@ local ReplicationShared = require(script.Parent.ReplicationShared)
 local ChannelRegistry = require(script.Parent.ReplicationShared.ChannelRegistry)
 local RemoteSerialization = require(script.Parent.Parent.Remotes.RemoteSerialization)
 local PredictionsServer = require(script.Parent.Parent.Predictions.PredictionsServer)
+local ReplicationRemotes = require(script.Parent.ReplicationShared.ReplicationRemotes)
 
 type SnapshotPreparerAsync = (player: Player) -> (boolean, any)
 
@@ -50,14 +51,21 @@ function ReplicationServer.getReadyPlayers(): { Player }
 	return players
 end
 
-function ReplicationServer.publish(channel: ChannelRegistry.Channel, player: Player, payload: ReplicationShared.Payload)
+function ReplicationServer.publish(
+	channel: ChannelRegistry.Channel,
+	player: Player,
+	payload: ReplicationShared.ReplicatorPayload
+)
 	if not readyPlayers[player] then
 		return
 	end
 	ReplicationServer._send(channel, player, payload)
 end
 
-function ReplicationServer.publishToReadyPlayers(channel: ChannelRegistry.Channel, payload: ReplicationShared.Payload)
+function ReplicationServer.publishToReadyPlayers(
+	channel: ChannelRegistry.Channel,
+	payload: ReplicationShared.ReplicatorPayload
+)
 	for player in readyPlayers do
 		ReplicationServer._send(channel, player, payload)
 	end
@@ -67,7 +75,7 @@ function ReplicationServer.getValidatedPayload(
 	channel: ChannelRegistry.Channel,
 	payloadContent: any,
 	kind: ReplicationShared.PayloadKinds
-): ReplicationShared.Payload?
+): ReplicationShared.ReplicatorPayload?
 	local valid = if kind == "value"
 		then ReplicationServer.validateValue(channel, payloadContent)
 		else ReplicationServer.validatePatch(channel, payloadContent)
@@ -83,7 +91,7 @@ function ReplicationServer.createPayload(
 	channel: ChannelRegistry.Channel,
 	payloadContent: any,
 	kind: ReplicationShared.PayloadKinds
-): ReplicationShared.Payload
+): ReplicationShared.ReplicatorPayload
 	ReplicationServer._validateSerialization(channel, payloadContent, kind)
 	return if kind == "value"
 		then { kind = "value", value = payloadContent }
@@ -104,7 +112,11 @@ function ReplicationServer.validatePatch(channel: ChannelRegistry.Channel, patch
 end
 
 -- private
-function ReplicationServer._send(channel: ChannelRegistry.Channel, player: Player, payload: ReplicationShared.Payload)
+function ReplicationServer._send(
+	channel: ChannelRegistry.Channel,
+	player: Player,
+	payload: ReplicationShared.ReplicatorPayload
+)
 	local id = channelIds[channel.key]
 	local known = knownChannelIds[player]
 	local key = if known[id] then nil else channel.key
@@ -114,7 +126,7 @@ function ReplicationServer._send(channel: ChannelRegistry.Channel, player: Playe
 		return
 	end
 
-	ReplicationShared.streamRemote:fireClient(player, id, payload, key)
+	ReplicationRemotes.streamRemote:fireClient(player, id, payload, key)
 end
 
 function ReplicationServer._validateTypes(
@@ -235,17 +247,21 @@ end
 
 -- start
 if RunService:IsServer() and RunService:IsRunning() then
-	DefineHooks.run(ReplicationShared.fetchRemote, ReplicationShared.FETCH_REMOTE_NAME, ReplicationShared.SENCHA_MODULE)
 	DefineHooks.run(
-		ReplicationShared.streamRemote,
-		ReplicationShared.STREAM_REMOTE_NAME,
-		ReplicationShared.SENCHA_MODULE
+		ReplicationRemotes.fetchRemote,
+		ReplicationRemotes.FETCH_REMOTE_NAME,
+		ReplicationRemotes.SENCHA_MODULE
+	)
+	DefineHooks.run(
+		ReplicationRemotes.streamRemote,
+		ReplicationRemotes.STREAM_REMOTE_NAME,
+		ReplicationRemotes.SENCHA_MODULE
 	)
 	PredictionsServer.setStreamSender(function(player, id, payload)
-		ReplicationShared.streamRemote:fireClient(player, id, payload)
+		ReplicationRemotes.streamRemote:fireClient(player, id, payload)
 	end)
 
-	ReplicationShared.fetchRemote:onServerInvoke(ReplicationServer._tryFetchAsync)
+	ReplicationRemotes.fetchRemote:onServerInvoke(ReplicationServer._tryFetchAsync)
 
 	Players.PlayerRemoving:Connect(function(player)
 		readyPlayers[player] = nil

@@ -1,6 +1,4 @@
 local gt = require(script.Parent.Parent.Parent.GreenTea)
-local RemoteEvent = require(script.Parent.Parent.Remotes.Kinds.RemoteEvent)
-local RemoteFunction = require(script.Parent.Parent.Remotes.Kinds.RemoteFunction)
 
 export type IncrementalConfig<T, P> = {
 	patchType: P,
@@ -14,9 +12,6 @@ export type SavedIncrementalConfig<T, P> = {
 }
 
 local ReplicationShared = {}
-ReplicationShared.SENCHA_MODULE = script.Parent.Parent
-ReplicationShared.FETCH_REMOTE_NAME = "ReplicationFetch"
-ReplicationShared.STREAM_REMOTE_NAME = "ReplicationStream"
 
 -- values are wrapped so nil values survive being placed in the snapshot table
 local payloadKinds = gt.build(gt.union(gt.literal("value"), gt.literal("patch")))
@@ -27,18 +22,34 @@ local patchPayload = gt.build(gt.table({ kind = gt.literal("patch"), patch = gt.
 export type ValuePayload = typeof(valuePayload:type())
 export type PatchPayload = typeof(patchPayload:type())
 
-local snapshotEntry = gt.build(gt.table({ id = gt.number({ integer = true }), payload = valuePayload:type() }))
-export type SnapshotEntry = typeof(snapshotEntry:type())
+-- one replicator's update
+local replicatorPayload = gt.build(gt.union(valuePayload:type(), patchPayload:type()))
+export type ReplicatorPayload = typeof(replicatorPayload:type())
+
+-- a replicator update held back while a player's predicted request runs, then sent inside a batch
+local heldMessage = gt.build(gt.table({
+	id = gt.number({ integer = true }),
+	payload = replicatorPayload:type(),
+	key = gt.optional(gt.string()),
+}))
+export type HeldMessage = typeof(heldMessage:type())
+
+-- a predicted request's held updates, sent together with its ack or cancel on channel id 0
+local batchPayload = gt.build(gt.table({
+	kind = gt.literal("batch"),
+	messages = gt.array(heldMessage:type()),
+	ack = gt.optional(gt.number({ integer = true })),
+	cancel = gt.optional(gt.number({ integer = true })),
+}))
+export type BatchPayload = typeof(batchPayload:type())
+
+ReplicationShared.snapshotEntry =
+	gt.build(gt.table({ id = gt.number({ integer = true }), payload = valuePayload:type() }))
+export type SnapshotEntry = typeof(ReplicationShared.snapshotEntry:type())
 export type Snapshot = { [string]: SnapshotEntry }
 
-local payload = gt.build(gt.union(valuePayload:type(), patchPayload:type()))
-export type Payload = typeof(payload:type())
-
-ReplicationShared.fetchRemote = RemoteFunction.new(
-	gt.args(),
-	gt.returns(gt.boolean(), gt.optional(gt.dictionary(gt.string(), snapshotEntry:type())))
-):rateLimit({ burst = 5, perSecond = 2 })
-ReplicationShared.streamRemote =
-	RemoteEvent.new(gt.number({ integer = true }), payload:type(), gt.optional(gt.string()))
+-- anything the ReplicationStream remote carries: a replicator update, or a batch of them
+ReplicationShared.streamPayload = gt.build(gt.union(valuePayload:type(), patchPayload:type(), batchPayload:type()))
+export type StreamPayload = typeof(ReplicationShared.streamPayload:type())
 
 return ReplicationShared
