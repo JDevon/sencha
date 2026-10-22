@@ -1,8 +1,8 @@
 local RunService = game:GetService("RunService")
 
 local ChannelUtil = require(script.Parent.ChannelUtil)
-local ChannelBatch = require(script.Parent.ChannelBatch)
 local ReplicationShared = require(script.Parent.Parent)
+local ChannelBatch = require(script.Parent.ChannelBatch)
 local gt = require(script.Parent.Parent.Parent.Parent.Parent.GreenTea)
 local Signal = require(script.Parent.Parent.Parent.Parent.Parent.Signal)
 local Failures = require(script.Parent.Parent.Parent.Parent.Util.Failures)

@@ -1,7 +1,7 @@
 [package]
 name = "jdevon/sencha"
 description = "A network package built around GreenTea, with strictly typed remotes and replicators."
-version = "0.1.0"
+version = "0.2.0"
 license = "MIT"
 authors = ["JDevon"]
 registry = "https://github.com/UpliftGames/wally-index"
